@@ -1,0 +1,504 @@
+
+
+# import json
+# import time
+# from urllib.parse import urljoin, urlparse
+# from bs4 import BeautifulSoup
+# from selenium import webdriver
+# from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.options import Options
+# import os
+# import re
+
+
+# def slugify(text):
+#     return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+
+
+# def get_word_sequences(words, min_len=2):
+#     sequences = []
+#     for i in range(len(words)):
+#         for j in range(i + min_len, len(words) + 1):
+#             sequences.append('-'.join(words[i:j]))
+#     return sequences
+
+
+# def has_matching_sequence(heading_slug, url_slug):
+#     heading_parts = heading_slug.split('-')
+#     url_parts = url_slug.split('-')
+
+#     heading_seqs = get_word_sequences(heading_parts)
+#     url_seqs = get_word_sequences(url_parts)
+
+#     for seq in heading_seqs:
+#         if seq in url_slug:
+#             print(f"Matched sequence from heading in URL: {seq}")
+#             return True
+
+#     for seq in url_seqs:
+#         if seq in heading_slug:
+#             print(f"Matched sequence from URL in heading: {seq}")
+#             return True
+
+#     return False
+
+
+# def is_product_detail_page(driver, url):
+#     print(f"Checking if URL is a product detail page: {url}")
+#     try:
+#         driver.get(url)
+#         time.sleep(2)
+#         soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+#         for heading in soup.find_all(['h1', 'h2']):
+#             classes = heading.get('class') or []
+#             if any(cls in ['product_title', 'product-title', 'fusion-title-heading'] for cls in classes):
+#                 heading_text = heading.get_text(strip=True)
+#                 if heading_text:
+#                     heading_slug = slugify(heading_text)
+#                     url_slug = slugify(urlparse(url).path.strip('/'))
+
+#                     print(f"Heading: {heading_text}")
+#                     print(f"Heading Slug: {heading_slug}")
+#                     print(f"URL Slug: {url_slug}")
+
+#                     if has_matching_sequence(heading_slug, url_slug):
+#                         print("Product detail page detected.")
+#                         return True
+
+#         print("Not a product detail page.")
+#         return False
+
+#     except Exception as e:
+#         print(f"Error checking product detail page: {e}")
+#         return False
+
+
+# def extract_dynamic_hrefs(driver, url):
+#     try:
+#         driver.get(url)
+#         time.sleep(3)  # Let JS render
+#         soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+#         # # ✅ Check for product grid presence
+#         # has_product_grid = soup.find(
+#         #     lambda tag: tag.name in ['div', 'ul'] and (
+#         #         any(cls in ['products', 'product', 'product-container'] for cls in (tag.get('class') or []))
+#         #     )
+#         # )
+#         # if not has_product_grid:
+#         #     return []
+
+#         # ✅ Extract hrefs
+#         all_hrefs = [a.get('href') for a in soup.find_all('a') if a.get('href')]
+#         filtered_hrefs = [
+#             href for href in all_hrefs
+#             if href.startswith("http") or href.startswith("https") or href.startswith("/")
+#         ]
+#         return filtered_hrefs
+
+#     except Exception as e:
+#         print(f"Error extracting hrefs from {url}: {e}")
+#         return []
+
+
+# def save_url_to_json(output_file, current_url):
+#     urls = []
+
+#     if os.path.exists(output_file):
+#         with open(output_file, 'r', encoding='utf-8') as f:
+#             try:
+#                 urls = json.load(f)
+#             except json.JSONDecodeError:
+#                 urls = []
+
+#     if current_url not in urls:
+#         urls.append(current_url)
+
+#         with open(output_file, 'w', encoding='utf-8') as f:
+#             json.dump(urls, f, ensure_ascii=False, indent=4)
+
+
+# import time
+# from urllib.parse import urlparse, urljoin
+# from selenium import webdriver
+# from selenium.webdriver.chrome.service import Service
+# import time
+# import platform
+# from urllib.parse import urlparse, urljoin
+# from selenium import webdriver
+# from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.options import Options
+# from webdriver_manager.chrome import ChromeDriverManager
+
+
+
+# # def get_driver():
+# #     options = webdriver.ChromeOptions()
+# #     options.add_argument('--headless=new')  # modern headless mode (more stable from Chrome 109+)
+# #     options.add_argument('--disable-gpu')
+# #     options.add_argument('--no-sandbox')
+# #     options.add_argument("--window-size=1920,1080")
+# #     options.add_argument('--disable-dev-shm-usage')  # for some linux distros (e.g. Docker)
+# #     current_os = platform.system()
+# #     print(f"Detected OS: {current_os}")
+# #     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+# #     return driver
+# from seleniumwire import webdriver
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+
+
+# # Proxy details
+# proxy_host = '103.186.130.206'
+# proxy_port = '50100'
+# proxy_protocol = 'http'
+# proxy_user = 'KPGLZJBt'
+# proxy_pass = 'y8rfOsKQ35'
+
+# # Selenium-wire proxy config
+# seleniumwire_options = {
+#     'proxy': {
+#         'http': f'{proxy_protocol}://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}',
+#         'https': f'{proxy_protocol}://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}',
+#         'no_proxy': 'localhost,127.0.0.1'
+#     }
+# }
+
+# def get_driver():
+
+
+#     chrome_options = webdriver.ChromeOptions()
+#     chrome_options.add_argument('--headless=new')
+#     chrome_options.add_argument('--disable-gpu')
+#     chrome_options.add_argument('--no-sandbox')
+#     chrome_options.add_argument("--window-size=1920,1080")
+
+#     driver = webdriver.Chrome(
+#         service=Service(ChromeDriverManager().install()),
+#         seleniumwire_options=seleniumwire_options,
+#         options=chrome_options
+#     )
+#     return driver
+
+
+# def crawl_links_recursively(base_url, output_file):
+#     driver = get_driver()
+
+#     visited = set()
+#     to_visit = [base_url]
+#     domain = urlparse(base_url).netloc
+
+#     ignored_keywords = [
+#         'wp-content', 'wpcontent', 'blog', 'blogs', 'my-account', 'myaccount', 'account', 'user-account',
+#         'customer-account', 'order', 'terms-use', 'legal', 'policy',
+#         'returns-and-exchange', 'returns-exchange', 'returns', 'exchange', 'return-policy', 'refund-policy',
+#         'refundpolicy', 'refunds', 'return', 'exchange-policy', 'terms-and-condition', 'terms-condition',
+#         'terms-and-conditions', 'terms-conditions', 'terms', 'conditions', 'terms-of-service', 'payment-policy',
+#         'paymentpolicy', 'payment', 'payment-methods', 'payments', 'billing', 'order-cancellation-policy',
+#         'cancellation-policy', 'cancel-policy', 'order-cancellation', 'order-cancel', 'cancel-order',
+#         'shipping-delivery', 'shipping', 'delivery', 'shipping-policy', 'delivery-policy', 'shipping-information',
+#         'delivery-information', 'privacy-policy', 'privacy', 'privacy-statement', 'data-policy', 'cookie-policy',
+#         'request-call-back', 'request-callback', 'callback-request', 'call-back', 'callback', 'lost-password',
+#         'forgot-password', 'password-recovery', 'reset-password', 'recover-password', 'orders-tracking',
+#         'order-tracking', 'track-order', 'track-orders', 'tracking', 'cart', 'shopping-cart',
+#         'checkout', 'check-out', 'checkout-page', 'contact-us', 'contact', 'get-in-touch',
+#         'reach-us', 'support', 'help-center', 'about-usa-leather-factory', 'about', 'about-us', 'our-story',
+#         'company-info', 'size-chart', 'sizing', 'size-guide', 'measurement-guide', 'faqs', 'faq',
+#         'frequently-asked-questions', 'help-faq', 'author', 'authors', 'fastest-service', 'fast-delivery',
+#         'quick-delivery', 'guaranteed-delivery'
+#     ]
+
+#     try:
+#         while to_visit:
+#             current_url = to_visit.pop(0)
+#             if current_url in visited:
+#                 continue
+
+#             print(f"Crawling: {current_url}")
+#             visited.add(current_url)
+
+#             # Only save if not ignored
+#             parsed_url = urlparse(current_url)
+#             normalized_path = parsed_url.path.lower()
+
+#             if not any(part == keyword for part in normalized_path.split('/') for keyword in ignored_keywords):
+#                 save_url_to_json(output_file, current_url)
+
+#             hrefs = extract_dynamic_hrefs(driver, current_url)
+
+#             for href in hrefs:
+#                 full_url = urljoin(current_url, href)
+#                 parsed_href_url = urlparse(full_url)
+#                 normalized_href_path = parsed_href_url.path.lower()
+#                 normalized_href_url = parsed_href_url.scheme + "://" + parsed_href_url.netloc + parsed_href_url.path
+
+#                 if (
+#                     parsed_href_url.netloc == domain and
+#                     'product/' not in normalized_href_path and
+#                     normalized_href_url not in visited and
+#                     normalized_href_url not in to_visit
+#                 ):
+#                     to_visit.append(normalized_href_url)
+
+#             time.sleep(1)
+
+#     finally:
+#         driver.quit()
+
+#     print(f"\nTotal URLs crawled: {len(visited)}")
+#     print(f"Saved to: {output_file}")
+
+
+
+
+
+
+import json
+import time
+from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+import os
+import re
+
+
+def slugify(text):
+    return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+
+
+def get_word_sequences(words, min_len=2):
+    sequences = []
+    for i in range(len(words)):
+        for j in range(i + min_len, len(words) + 1):
+            sequences.append('-'.join(words[i:j]))
+    return sequences
+
+
+def has_matching_sequence(heading_slug, url_slug):
+    heading_parts = heading_slug.split('-')
+    url_parts = url_slug.split('-')
+
+    heading_seqs = get_word_sequences(heading_parts)
+    url_seqs = get_word_sequences(url_parts)
+
+    for seq in heading_seqs:
+        if seq in url_slug:
+            print(f"Matched sequence from heading in URL: {seq}")
+            return True
+
+    for seq in url_seqs:
+        if seq in heading_slug:
+            print(f"Matched sequence from URL in heading: {seq}")
+            return True
+
+    return False
+
+
+def is_product_detail_page(driver, url):
+    print(f"Checking if URL is a product detail page: {url}")
+    try:
+        driver.get(url)
+        time.sleep(2)
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        for heading in soup.find_all(['h1', 'h2']):
+            classes = heading.get('class') or []
+            if any(cls in ['product_title', 'product-title', 'fusion-title-heading'] for cls in classes):
+                heading_text = heading.get_text(strip=True)
+                if heading_text:
+                    heading_slug = slugify(heading_text)
+                    url_slug = slugify(urlparse(url).path.strip('/'))
+
+                    print(f"Heading: {heading_text}")
+                    print(f"Heading Slug: {heading_slug}")
+                    print(f"URL Slug: {url_slug}")
+
+                    if has_matching_sequence(heading_slug, url_slug):
+                        print("Product detail page detected.")
+                        return True
+
+        print("Not a product detail page.")
+        return False
+
+    except Exception as e:
+        print(f"Error checking product detail page: {e}")
+        return False
+
+
+def extract_dynamic_hrefs(driver, url):
+    try:
+        driver.get(url)
+        time.sleep(3)  # Let JS render
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        # # ✅ Check for product grid presence
+        # has_product_grid = soup.find(
+        #     lambda tag: tag.name in ['div', 'ul'] and (
+        #         any(cls in ['products', 'product', 'product-container'] for cls in (tag.get('class') or []))
+        #     )
+        # )
+        # if not has_product_grid:
+        #     return []
+
+        # ✅ Extract hrefs
+        all_hrefs = [a.get('href') for a in soup.find_all('a') if a.get('href')]
+        filtered_hrefs = [
+            href for href in all_hrefs
+            if href.startswith("http") or href.startswith("https") or href.startswith("/")
+        ]
+        return filtered_hrefs
+
+    except Exception as e:
+        print(f"Error extracting hrefs from {url}: {e}")
+        return []
+
+
+def save_url_to_json(output_file, current_url):
+    urls = []
+
+    if os.path.exists(output_file):
+        with open(output_file, 'r', encoding='utf-8') as f:
+            try:
+                urls = json.load(f)
+            except json.JSONDecodeError:
+                urls = []
+
+    if current_url not in urls:
+        urls.append(current_url)
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(urls, f, ensure_ascii=False, indent=4)
+
+
+import time
+import platform
+from urllib.parse import urlparse, urljoin
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+
+
+
+# def get_driver():
+#     options = webdriver.ChromeOptions()
+#     options.add_argument('--headless=new')  # modern headless mode (more stable from Chrome 109+)
+#     options.add_argument('--disable-gpu')
+#     options.add_argument('--no-sandbox')
+#     options.add_argument("--window-size=1920,1080")
+#     options.add_argument('--disable-dev-shm-usage')  # for some linux distros (e.g. Docker)
+#     current_os = platform.system()
+#     print(f"Detected OS: {current_os}")
+#     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+#     return driver
+from seleniumwire import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+
+# Proxy details
+proxy_host = '46.3.133.104'
+proxy_port = '50100'
+proxy_protocol = 'http'
+proxy_user = 'UvPRiZ3u'
+proxy_pass = 'AixOXwU4nI'
+
+# Selenium-wire proxy config
+seleniumwire_options = {
+    'proxy': {
+        'http': f'{proxy_protocol}://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}',
+        'https': f'{proxy_protocol}://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}',
+        'no_proxy': 'localhost,127.0.0.1'
+    }
+}
+
+def get_driver():
+
+
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument("--window-size=1920,1080")
+
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        seleniumwire_options=seleniumwire_options,
+        options=chrome_options
+    )
+    return driver
+
+
+def crawl_links_recursively(base_url, output_file):
+    driver = get_driver()
+
+    visited = set()
+    # First make sure /shop is visited first
+    shop_url = urljoin(base_url, '/shop')
+    to_visit = [shop_url, base_url] 
+    # to_visit = [base_url]  # visit /shop first, then base_url
+    domain = urlparse(base_url).netloc
+
+    ignored_keywords = [
+        'wp-content', 'wpcontent', 'blog', 'blogs', 'my-account', 'myaccount', 'account', 'user-account',
+        'customer-account', 'order', 'terms-use', 'legal', 'policy',
+        'returns-and-exchange', 'returns-exchange', 'returns', 'exchange', 'return-policy', 'refund-policy',
+        'refundpolicy', 'refunds', 'return', 'exchange-policy', 'terms-and-condition', 'terms-condition',
+        'terms-and-conditions', 'terms-conditions', 'terms', 'conditions', 'terms-of-service', 'payment-policy',
+        'paymentpolicy', 'payment', 'payment-methods', 'payments', 'billing', 'order-cancellation-policy',
+        'cancellation-policy', 'cancel-policy', 'order-cancellation', 'order-cancel', 'cancel-order',
+        'shipping-delivery', 'shipping', 'delivery', 'shipping-policy', 'delivery-policy', 'shipping-information',
+        'delivery-information', 'privacy-policy', 'privacy', 'privacy-statement', 'data-policy', 'cookie-policy',
+        'request-call-back', 'request-callback', 'callback-request', 'call-back', 'callback', 'lost-password',
+        'forgot-password', 'password-recovery', 'reset-password', 'recover-password', 'orders-tracking',
+        'order-tracking', 'track-order', 'track-orders', 'tracking', 'cart', 'shopping-cart',
+        'checkout', 'check-out', 'checkout-page', 'contact-us', 'contact', 'get-in-touch',
+        'reach-us', 'support', 'help-center', 'about-usa-leather-factory', 'about', 'about-us', 'our-story',
+        'company-info', 'size-chart', 'sizing', 'size-guide', 'measurement-guide', 'faqs', 'faq',
+        'frequently-asked-questions', 'help-faq', 'author', 'authors', 'fastest-service', 'fast-delivery',
+        'quick-delivery', 'guaranteed-delivery'
+    ]
+
+    try:
+        while to_visit:
+            current_url = to_visit.pop(0)
+            if current_url in visited:
+                continue
+
+            print(f"Crawling: {current_url}")
+            visited.add(current_url)
+
+            # Only save if not ignored
+            parsed_url = urlparse(current_url)
+            normalized_path = parsed_url.path.lower()
+
+            if not any(part == keyword for part in normalized_path.split('/') for keyword in ignored_keywords):
+                save_url_to_json(output_file, current_url)
+
+            hrefs = extract_dynamic_hrefs(driver, current_url)
+
+            for href in hrefs:
+                full_url = urljoin(current_url, href)
+                parsed_href_url = urlparse(full_url)
+                normalized_href_path = parsed_href_url.path.lower()
+                normalized_href_url = parsed_href_url.scheme + "://" + parsed_href_url.netloc + parsed_href_url.path
+
+                if (
+                    parsed_href_url.netloc == domain and
+                    'product/' not in normalized_href_path and
+                    normalized_href_url not in visited and
+                    normalized_href_url not in to_visit
+                ):
+                    to_visit.append(normalized_href_url)
+
+            time.sleep(1)
+
+    finally:
+        driver.quit()
+
+    print(f"\nTotal URLs crawled: {len(visited)}")
+    print(f"Saved to: {output_file}")
+

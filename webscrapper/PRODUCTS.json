@@ -1,0 +1,59 @@
+[
+    {
+        "url": "https://www.jacketsjunction.com/product-category/women-outfits/womens-leather-jackets/",
+        "products": [
+            {
+                "name": "Hailey Bieber Leather Jacket",
+                "price": "$139.00",
+                "product_url": "https://www.jacketsjunction.com/product/hailey-bieber-leather-jacket/",
+                "image_url": "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_1_11b95140-0254-40aa-8c4f-49cc29d2522c-300x300.webp",
+                "product_details": {
+                    "Image URL": "https://www.jacketsjunction.com/wp-content/themes/bootscore/assets/img/logo/logo.webp",
+                    "Thumbnail Images": [
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_1_11b95140-0254-40aa-8c4f-49cc29d2522c-600x741.webp",
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_2_79a6702f-c411-48ea-8828-ebe5a91ec7a1-600x741.webp",
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_6_10f83a45-b228-4c1d-8f3c-e671ea12b320-600x741.webp",
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_5_8fe15303-479e-4d68-abae-d2e60e201cf7-600x741.webp",
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_4_cfe6c59a-4d43-4c31-8021-360179306394-600x741.webp",
+                        "https://www.jacketsjunction.com/wp-content/uploads/2025/03/001_3_9f6b31ce-86d2-4290-81f5-53614a962ceb-600x741.webp"
+                    ],
+                    "Title": "Hailey Bieber Leather Jacket",
+                    "Rating": null,
+                    "Customer Reviews": null,
+                    "Size Options": [
+                        "Choose an option",
+                        "XS",
+                        "S",
+                        "M",
+                        "L",
+                        "XL",
+                        "2XL",
+                        "3XL",
+                        "4XL",
+                        "Custom Size"
+                    ],
+                    "Product Specification": [
+                        "Material: Real Leather",
+                        "Inner: Soft Lining",
+                        "Closure: Zipper Closure",
+                        "Collar: Lapel Collar",
+                        "Cuffs: Zipper Cuffs",
+                        "Color: Black"
+                    ],
+                    "Previous Price": null,
+                    "New Price": null,
+                    "Price Range": [
+                        "$139.00",
+                        "$159.00",
+                        "$169.00",
+                        "$189.00",
+                        "$129.00",
+                        "$149.00",
+                        "$99.00"
+                    ]
+                }
+            }
+ 
+        ]
+    }
+]
