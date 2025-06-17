@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
-      - .:/app
+    - ./webscrapper:/app   # 👈 correct this
     ports:
       - "8000:8000"
     depends_on:
@@ -46,8 +46,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    volumes:
-      - ./web-scraper-dashboard:/app
+    # volumes:
+    #   - ./web-scraper-dashboard:/app
     command: npm start
 
 volumes:
