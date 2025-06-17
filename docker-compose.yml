@@ -46,9 +46,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    # volumes:
-    #   - ./web-scraper-dashboard:/app
-    command: npm start
 
 volumes:
   postgres_data:
