@@ -95,8 +95,8 @@ DATABASES = {
         'NAME': 'scrapper',
         'USER': 'postgres',
         'PASSWORD': '12345678',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'HOST': 'db',       # Docker service name
+        'PORT': '5432',     # Do NOT change this
     }
 }
 

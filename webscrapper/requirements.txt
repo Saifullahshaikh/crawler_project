@@ -1,0 +1,7 @@
+beautifulsoup4==4.13.4
+Django==5.2.3
+ninja==1.11.1.4
+Requests==2.32.4
+selenium==4.33.0
+tqdm==4.67.1
+webdriver_manager==4.0.2
