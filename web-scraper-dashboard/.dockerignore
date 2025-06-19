@@ -1,6 +1,4 @@
-npm-debug.log
-.env
-.env.local
-.dockerignore
-Dockerfile
-.git
+node_modules/
+.next/
+public/
+*.zip
