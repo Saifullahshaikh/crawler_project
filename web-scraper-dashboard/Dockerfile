@@ -8,7 +8,7 @@ COPY .next .next
 COPY public public
 COPY node_modules node_modules
 COPY package.json package.json
-COPY next.config.js next.config.js
+COPY next.config.mjs next.config.mjs
 
 EXPOSE 3000
 
