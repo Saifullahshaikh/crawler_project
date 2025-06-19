@@ -18,7 +18,7 @@ services:
       context: ./webscrapper
       dockerfile: Dockerfile
     command: 
-        sh -c "python manage.py migrate && gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000"
+        sh -c "python manage.py migrate && gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1"
     volumes:
     - ./webscrapper:/app   # 👈 correct this
     ports:
