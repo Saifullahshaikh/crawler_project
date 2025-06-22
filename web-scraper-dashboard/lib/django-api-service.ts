@@ -1,5 +1,5 @@
 // Django API endpoints
-const DJANGO_API_BASE = process.env.NEXT_PUBLIC_DJANGO_API_URL || "http://localhost:8000/api"
+const DJANGO_API_BASE = process.env.NEXT_PUBLIC_DJANGO_API_URL || "http://167.172.143.147:8000/api"
 
 export interface CrawlSessionData {
   id: string

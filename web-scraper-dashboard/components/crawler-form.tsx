@@ -81,7 +81,7 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     setStatus({ status: "pending", progress: 0, message: "Starting crawl process..." })
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/crawl/", {
+      const response = await fetch("http://167.172.143.147:8000/api/crawl/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +122,7 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
 
   const pollJobStatus = async (jobId: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/crawl/status?jobId=${jobId}`)
+      const response = await fetch(`http://167.172.143.147:8000/api/crawl/status?jobId=${jobId}`)
       const data = await response.json()
 
       if (!response.ok) {
