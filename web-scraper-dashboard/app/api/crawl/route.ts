@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 async function startDjangoCrawlProcess(sessionId: string, urls: string[]) {
   try {
     // Call Django API to start the actual crawling
-    const response = await fetch(`${process.env.DJANGO_API_URL}/crawl/start/`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/start/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
