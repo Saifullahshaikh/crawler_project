@@ -17,12 +17,14 @@ services:
     build:
       context: ./webscrapper
       dockerfile: Dockerfile
-    command: 
-        sh -c "python manage.py migrate && gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1"
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1"
     volumes:
-    - ./webscrapper:/app   # 👈 correct this
+      - ./webscrapper:/app
     ports:
       - "8000:8000"
+    shm_size: '1gb'  # 👈 prevents Chrome crash due to /dev/shm
     depends_on:
       - db
     environment:
@@ -31,6 +33,7 @@ services:
       - DB_NAME=scrapper
       - DB_USER=postgres
       - DB_PASSWORD=12345678
+
 
   frontend:
     build:

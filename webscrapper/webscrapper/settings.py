@@ -30,6 +30,7 @@ ALLOWED_HOSTS = ["*"]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://172.16.0.2:3000",  # or wherever your frontend is running
+    "http://167.172.143.147:3000",
 ]
 
 
@@ -95,8 +96,8 @@ DATABASES = {
         'NAME': 'scrapper',
         'USER': 'postgres',
         'PASSWORD': '12345678',
-        'HOST': 'db',       # Docker service name
-        'PORT': '5432',     # Do NOT change this
+        'HOST': '167.172.143.147',       # Docker service name
+        'PORT': '5433',     # Do NOT change this
     }
 }
 

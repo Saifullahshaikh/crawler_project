@@ -79,7 +79,7 @@ if __name__ == "__main__":
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
 
-    driver_path = 'C:/Users/Connect2Aryans/Desktop/WEb scrapper/webscrapper/app/chromedriver.exe'
+    driver_path = '/app/chromedriver'
     driver = webdriver.Chrome(service=Service(driver_path), options=options)
 
     try:
