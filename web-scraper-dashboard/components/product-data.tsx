@@ -46,7 +46,7 @@ export function ProductData() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/products/")
+      const response = await fetch("http://167.172.143.147:8000/api/products/")
       const data = await response.json()
 
       if (!response.ok) {

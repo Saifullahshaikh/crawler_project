@@ -397,14 +397,21 @@ from webdriver_manager.chrome import ChromeDriverManager
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
 # Proxy details
-proxy_host = '46.3.133.104'
-proxy_port = '50100'
-proxy_protocol = 'http'
-proxy_user = 'UvPRiZ3u'
-proxy_pass = 'AixOXwU4nI'
+proxy_host = os.getenv('PROXY_HOST')
+proxy_port = os.getenv('PROXY_PORT')
+proxy_protocol = os.getenv('PROXY_PROTOCOL')
+proxy_user = os.getenv('PROXY_USER')
+proxy_pass = os.getenv('PROXY_PASS')
+
+
+print("Proxy details:", proxy_host, proxy_port, proxy_protocol, proxy_user, proxy_pass)
 
 # Selenium-wire proxy config
 seleniumwire_options = {

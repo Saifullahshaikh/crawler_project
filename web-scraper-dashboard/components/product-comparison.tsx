@@ -94,7 +94,7 @@ export function ProductComparison({
     setIsLoading(true)
 
     try {
-      const url = `http://127.0.0.1:8000/api/product-changes/?jobId=${specificJobId}`
+      const url = `http://167.172.143.147:8000/api/product-changes/?jobId=${specificJobId}`
 
       const response = await fetch(url)
       const data = await response.json()
