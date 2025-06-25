@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { serverConfig } from "@/lib/config"
 
 interface ProductDetail {
   "Image URL": string | null
@@ -46,7 +47,7 @@ export function ProductData() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://167.172.143.147:8000/api/products/")
+      const response = await fetch(`${process.env.DJANGO_API_URL}/products/`)
       const data = await response.json()
 
       if (!response.ok) {
