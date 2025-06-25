@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { PlusCircle, Trash2, Loader2 } from "lucide-react"
+import { PlusCircle, Trash2, Loader2, Bookmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,6 +15,7 @@ import { scrapeWithPythonApi } from "@/app/actions/python-api-scrape"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileUpload } from "@/components/file-upload"
 import { ApiFileUpload } from "@/components/api-file-upload"
+import { UrlManager } from "@/components/url-manager"
 
 type ScrapeMethod = "js" | "python-route" | "python-api"
 
@@ -25,7 +26,7 @@ export function UrlForm() {
   const [pythonFilePath, setPythonFilePath] = useState<string>("scripts/scraper.py")
   const [apiPythonFilePath, setApiPythonFilePath] = useState<string>("uploads/default_scraper.py")
   const { toast } = useToast()
-  const { addScrapedData } = useScrapingStore()
+  const { addScrapedData, addSavedUrl } = useScrapingStore()
 
   const addUrlField = () => {
     setUrls([...urls, ""])
@@ -49,6 +50,40 @@ export function UrlForm() {
 
   const handleApiFileSelected = (filePath: string) => {
     setApiPythonFilePath(filePath)
+  }
+
+  const handleSaveUrl = (url: string) => {
+    if (url.trim()) {
+      try {
+        new URL(url) // Validate URL
+        addSavedUrl(url.trim())
+        toast({
+          title: "URL Saved",
+          description: "URL has been added to your saved list",
+        })
+      } catch {
+        toast({
+          title: "Invalid URL",
+          description: "Please enter a valid URL format",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleUrlSelect = (url: string) => {
+    // Add to the first empty field or create a new field
+    const emptyIndex = urls.findIndex((u) => u.trim() === "")
+    if (emptyIndex !== -1) {
+      handleUrlChange(emptyIndex, url)
+    } else {
+      setUrls([...urls, url])
+    }
+  }
+
+  const handleMultipleUrlSelect = (selectedUrls: string[]) => {
+    // Replace current URLs with selected ones
+    setUrls(selectedUrls)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,77 +139,95 @@ export function UrlForm() {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            {urls.map((url, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  type="url"
-                  placeholder="https://example.com"
-                  value={url}
-                  onChange={(e) => handleUrlChange(index, e.target.value)}
-                  disabled={isLoading}
-                />
-                {urls.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removeUrlField(index)}
+    <div className="space-y-4">
+      {/* URL Manager Section */}
+      <UrlManager onUrlSelect={handleUrlSelect} onMultipleUrlSelect={handleMultipleUrlSelect} />
+
+      {/* Scraping Form */}
+      <Card>
+        <CardContent className="pt-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              {urls.map((url, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="https://example.com"
+                    value={url}
+                    onChange={(e) => handleUrlChange(index, e.target.value)}
                     disabled={isLoading}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <Tabs
-              value={scrapeMethod}
-              onValueChange={(value) => setScrapeMethod(value as ScrapeMethod)}
-              className="w-auto"
-            >
-              <TabsList>
-                <TabsTrigger value="js">JavaScript</TabsTrigger>
-                <TabsTrigger value="python-route">Python (Route)</TabsTrigger>
-                <TabsTrigger value="python-api">Python API</TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            {scrapeMethod === "python-route" && <FileUpload onFileSelected={handleFileSelected} />}
-
-            {scrapeMethod === "python-api" && <ApiFileUpload onFileSelected={handleApiFileSelected} />}
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
-                <PlusCircle className="h-4 w-4" />
-                Add URL
-              </Button>
-
-              <Button type="submit" disabled={isLoading} className="ml-auto">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Scraping...
-                  </>
-                ) : (
-                  `Scrape URLs (${
-                    scrapeMethod === "js"
-                      ? "JavaScript"
-                      : scrapeMethod === "python-route"
-                        ? "Python Route"
-                        : "Python API"
-                  })`
-                )}
-              </Button>
+                  />
+                  {url.trim() && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleSaveUrl(url)}
+                      disabled={isLoading}
+                      title="Save URL"
+                    >
+                      <Bookmark className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {urls.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeUrlField(index)}
+                      disabled={isLoading}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+
+            <div className="flex flex-col gap-4">
+              <Tabs
+                value={scrapeMethod}
+                onValueChange={(value) => setScrapeMethod(value as ScrapeMethod)}
+                className="w-auto"
+              >
+                <TabsList>
+                  <TabsTrigger value="js">JavaScript</TabsTrigger>
+                  <TabsTrigger value="python-route">Python (Route)</TabsTrigger>
+                  <TabsTrigger value="python-api">Python API</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {scrapeMethod === "python-route" && <FileUpload onFileSelected={handleFileSelected} />}
+
+              {scrapeMethod === "python-api" && <ApiFileUpload onFileSelected={handleApiFileSelected} />}
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
+                  <PlusCircle className="h-4 w-4" />
+                  Add URL
+                </Button>
+
+                <Button type="submit" disabled={isLoading} className="ml-auto">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Scraping...
+                    </>
+                  ) : (
+                    `Scrape URLs (${
+                      scrapeMethod === "js"
+                        ? "JavaScript"
+                        : scrapeMethod === "python-route"
+                          ? "Python Route"
+                          : "Python API"
+                    })`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

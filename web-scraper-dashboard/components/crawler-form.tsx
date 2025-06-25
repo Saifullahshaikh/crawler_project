@@ -6,9 +6,10 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, PlusCircle, Trash2, RefreshCw, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, PlusCircle, Trash2, RefreshCw, CheckCircle, AlertCircle, Bookmark } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
+import { useScrapingStore } from "@/lib/store"
 
 interface CrawlStatus {
   status: "pending" | "running" | "completed" | "failed"
@@ -17,8 +18,14 @@ interface CrawlStatus {
   error?: string
 }
 
-export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: string) => void }) {
-  const [urls, setUrls] = useState<string[]>([
+interface CrawlerFormProps {
+  onScrapeComplete: (jobId?: string) => void
+  urls?: string[]
+  setUrls?: (urls: string[]) => void
+}
+
+export function CrawlerForm({ onScrapeComplete, urls: externalUrls, setUrls: setExternalUrls }: CrawlerFormProps) {
+  const [internalUrls, setInternalUrls] = useState<string[]>([
     "https://www.nyjacket.com/",
     "https://www.californiajacket.com/",
     "https://wonderjackets.com/",
@@ -30,11 +37,17 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     "https://www.usajacket.com/",
     "https://www.usaleatherfactory.com/",
   ])
+
+  // Use external URLs if provided, otherwise use internal state
+  const urls = externalUrls || internalUrls
+  const setUrls = setExternalUrls || setInternalUrls
+
   const [isLoading, setIsLoading] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [status, setStatus] = useState<CrawlStatus | null>(null)
   const { toast } = useToast()
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const { addSavedUrl } = useScrapingStore()
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -62,6 +75,32 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     setUrls(newUrls)
   }
 
+  const handleSaveUrl = (url: string) => {
+    if (!url.trim()) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      new URL(url) // Validate URL format
+      addSavedUrl(url.trim())
+      toast({
+        title: "URL Saved",
+        description: "URL has been added to your saved list",
+      })
+    } catch {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL format",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -81,7 +120,7 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     setStatus({ status: "pending", progress: 0, message: "Starting crawl process..." })
 
     try {
-      const response = await fetch("http://167.172.143.147:8000/api/crawl/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +161,7 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
 
   const pollJobStatus = async (jobId: string) => {
     try {
-      const response = await fetch(`http://167.172.143.147:8000/api/crawl/status?jobId=${jobId}`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/status?jobId=${jobId}`)
       const data = await response.json()
 
       if (!response.ok) {
@@ -225,6 +264,18 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
                   disabled={isLoading}
                   className="flex-1"
                 />
+                {url.trim() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleSaveUrl(url)}
+                    disabled={isLoading}
+                    title="Save URL"
+                  >
+                    <Bookmark className="h-4 w-4" />
+                  </Button>
+                )}
                 {urls.length > 1 && (
                   <Button
                     type="button"

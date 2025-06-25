@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
+import { serverConfig } from "@/lib/config"
 
 interface ProductDetails {
   "Image URL"?: string
@@ -79,10 +80,12 @@ interface ComparisonData {
 export function ProductComparison({
   refreshTrigger,
   completedJobId,
+  
 }: {
   refreshTrigger: number
   completedJobId?: string
 }) {
+  console.log("Django API URL:", process.env.NEXT_PUBLIC_DJANGO_API_URL)
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [jobId, setJobId] = useState<string>("")
@@ -93,8 +96,10 @@ export function ProductComparison({
   const fetchComparisonData = async (specificJobId?: string) => {
     setIsLoading(true)
 
+    console.log("Django API URL:", process.env.NEXT_PUBLIC_DJANGO_API_URL)
+
     try {
-      const url = `http://167.172.143.147:8000/api/product-changes/?jobId=${specificJobId}`
+      const url = `${process.env.NEXT_PUBLIC_DJANGO_API_URL}/product-changes/?jobId=${specificJobId}`
 
       const response = await fetch(url)
       const data = await response.json()
