@@ -466,7 +466,7 @@ def crawl_links_recursively(base_url, output_file):
         'reach-us', 'support', 'help-center', 'about-usa-leather-factory', 'about', 'about-us', 'our-story',
         'company-info', 'size-chart', 'sizing', 'size-guide', 'measurement-guide', 'faqs', 'faq',
         'frequently-asked-questions', 'help-faq', 'author', 'authors', 'fastest-service', 'fast-delivery',
-        'quick-delivery', 'guaranteed-delivery'
+        'quick-delivery', 'guaranteed-delivery',
     ]
 
     try:

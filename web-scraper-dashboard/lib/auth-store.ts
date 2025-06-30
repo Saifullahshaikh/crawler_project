@@ -2,57 +2,141 @@
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { djangoApiService } from "./django-api-service"
 
-// Hardcoded credentials
-const VALID_CREDENTIALS = {
-  username: "admin",
-  password: "password123",
-  email: "admin@webcrawler.com",
+interface User {
+  id: string
+  username: string
+  email: string
 }
 
 interface AuthState {
+  user: User | null
   isAuthenticated: boolean
-  user: {
-    username: string
-    email: string
-  } | null
-  login: (username: string, password: string) => boolean
-  logout: () => void
+  isLoading: boolean
+  login: (username: string, password: string) => Promise<boolean>
+  logout: () => Promise<void>
+  checkAuth: () => Promise<void>
+  setLoading: (loading: boolean) => void
+}
+
+// Hardcoded credentials for demo
+const DEMO_CREDENTIALS = {
+  username: "admin",
+  email: "admin@webcrawler.com",
+  password: "password123",
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
-      isAuthenticated: false,
+    (set, get) => ({
       user: null,
+      isAuthenticated: false,
+      isLoading: false,
 
-      login: (username: string, password: string) => {
-        // Check credentials
-        if (
-          (username === VALID_CREDENTIALS.username || username === VALID_CREDENTIALS.email) &&
-          password === VALID_CREDENTIALS.password
-        ) {
-          set({
-            isAuthenticated: true,
-            user: {
-              username: VALID_CREDENTIALS.username,
-              email: VALID_CREDENTIALS.email,
-            },
-          })
-          return true
+      setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+      login: async (username: string, password: string) => {
+        set({ isLoading: true })
+
+        try {
+          // First try demo credentials
+          if (
+            (username === DEMO_CREDENTIALS.username || username === DEMO_CREDENTIALS.email) &&
+            password === DEMO_CREDENTIALS.password
+          ) {
+            const demoUser: User = {
+              id: "2",
+              username: DEMO_CREDENTIALS.username,
+              email: DEMO_CREDENTIALS.email,
+            }
+
+            set({
+              user: demoUser,
+              isAuthenticated: true,
+              isLoading: false,
+            })
+            return true
+          }
+
+          // Try Django API authentication
+          const response = await djangoApiService.login(username, password)
+
+          if (response.success && response.user) {
+            set({
+              user: response.user,
+              isAuthenticated: true,
+              isLoading: false,
+            })
+            return true
+          }
+
+          set({ isLoading: false })
+          return false
+        } catch (error) {
+          console.error("Login error:", error)
+          set({ isLoading: false })
+          return false
         }
-        return false
       },
 
-      logout: () => {
+      logout: async () => {
+        set({ isLoading: true })
+
+        try {
+          // Try to logout from Django API
+          await djangoApiService.logout()
+        } catch (error) {
+          console.error("Logout error:", error)
+        }
+
         set({
-          isAuthenticated: false,
           user: null,
+          isAuthenticated: false,
+          isLoading: false,
         })
+      },
+
+      checkAuth: async () => {
+        const { user } = get()
+        if (!user) {
+          set({ isAuthenticated: false })
+          return
+        }
+
+        try {
+          // Check with Django API if session is still valid
+          const response = await djangoApiService.getSessionStatus()
+          if (response.authenticated && response.user) {
+            set({
+              user: response.user,
+              isAuthenticated: true,
+            })
+          } else {
+            set({
+              user: null,
+              isAuthenticated: false,
+            })
+          }
+        } catch (error) {
+          console.error("Auth check error:", error)
+          // Keep demo user authenticated even if Django API is down
+          if (user.id === "2") {
+            set({ isAuthenticated: true })
+          } else {
+            set({
+              user: null,
+              isAuthenticated: false,
+            })
+          }
+        }
       },
     }),
     {
       name: "auth-store",
+      onRehydrationComplete: (state) => {
+        state.checkAuth()
+      },
     },
   ),
 )

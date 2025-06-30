@@ -15,6 +15,8 @@ from django.http import QueryDict
 from .scrapper import ProductDataScraper
 from .crawler import crawl_links_recursively
 # from .crawler import crawl_website
+from django.core.exceptions import ObjectDoesNotExist
+
 
 from .models import ProductChangeLog
 from .utils import save_crawled_data_to_db
@@ -175,6 +177,74 @@ def get_job_status(request):
         "results": job.get("results", {})
     })
 
+
+# @require_http_methods(["GET"])
+# def get_job_status(request):
+#     job_id = request.GET.get("jobId")
+
+#     if not job_id:
+#         return JsonResponse({"error": "Missing job ID"}, status=400)
+
+#     # Try to fetch from database
+#     try:
+#         session = UserSession.objects.get(job_id=job_id)
+#     except ObjectDoesNotExist:
+#         return JsonResponse({"error": "Invalid job ID"}, status=404)
+
+#     # Optional: fallback to jobs dict if used for temp memory progress tracking
+#     job = jobs.get(job_id)
+
+#     return JsonResponse({
+#         "id": str(session.id),
+#         "urls": session.urls,
+#         "status": session.status,
+#         "progress": session.progress,
+#         "startedAt": session.started_at,
+#         "completedAt": session.completed_at,
+#         "message": session.message,
+#         "error": session.error,
+#         "results": job.get("results") if job else {}  # optional fallback
+#     })
+
+# @require_http_methods(["GET"])
+# def get_job_status(request):
+#     job_id = request.GET.get("jobId")
+
+#     if not job_id:
+#         return JsonResponse({"error": "Missing job ID"}, status=400)
+
+#     try:
+#         session = UserSession.objects.get(job_id=job_id)
+#     except ObjectDoesNotExist:
+#         return JsonResponse({"error": "Invalid job ID"}, status=404)
+
+#     job = jobs.get(job_id)
+
+#     # If job exists in memory, it's likely still running
+#     if job:
+#         status = job["status"]
+#         progress = job["progress"]
+#         results = job.get("results", {})
+#         message = job.get("message")
+#     else:
+#         # Fallback to DB if job not in memory (restored, failed, or completed)
+#         status = session.status
+#         progress = session.progress
+#         results = {}
+#         message = session.message
+
+#     return JsonResponse({
+#         "id": str(session.id),
+#         "urls": session.urls,
+#         "status": status,
+#         "progress": progress,
+#         "startedAt": session.started_at.isoformat(),
+#         "completedAt": session.completed_at.isoformat() if session.completed_at else None,
+#         "message": message,
+#         "error": session.error,
+#         "results": results
+#     })
+
 @require_http_methods(["GET"])
 def get_categories(request):
     completed_jobs = [job for job in jobs.values() if job["status"] == "completed"]
@@ -210,3 +280,397 @@ def get_product_changes(request):
         data[log.change_type].append(log.data)
 
     return JsonResponse(data)
+
+
+
+from rest_framework import status
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.http import JsonResponse
+from .models import UserSession, CrawlSession, SavedUrl
+import json
+from django.utils import timezone
+
+
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+def login_view(request):
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return Response({
+                'success': False,
+                'message': 'Username and password are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            login(request, user)
+            return Response({
+                'success': True,
+                'user': {
+                    'id': str(user.id),
+                    'username': user.username,
+                    'email': user.email
+                }
+            })
+        else:
+            return Response({
+                'success': False,
+                'message': 'Invalid credentials'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            
+    except json.JSONDecodeError:
+        return Response({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@csrf_exempt
+@api_view(['POST'])
+def logout_view(request):
+    logout(request)
+    return Response({'success': True})
+
+@api_view(['GET'])
+def profile_view(request):
+    if request.user.is_authenticated:
+        return Response({
+            'user': {
+                'id': str(request.user.id),
+                'username': request.user.username,
+                'email': request.user.email
+            }
+        })
+    else:
+        return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['GET'])
+def session_status_view(request):
+    return Response({
+        'authenticated': request.user.is_authenticated,
+        'user': {
+            'id': str(request.user.id),
+            'username': request.user.username,
+            'email': request.user.email
+        } if request.user.is_authenticated else None
+    })
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({
+        'status': 'healthy',
+        'message': 'Server is running'
+    })
+
+# User Sessions
+@csrf_exempt
+@api_view(['GET', 'POST'])
+def user_sessions_view(request):
+    if request.method == 'GET':
+        user_id = int(request.GET.get('user_id'))
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(id=user_id)
+            sessions = UserSession.objects.filter(user=user)
+            
+            # Get active session (running or pending)
+            active_session = sessions.filter(status__in=['running', 'pending']).first()
+            
+            # Serialize sessions
+            def serialize_session(session):
+                return {
+                    'id': str(session.id),
+                    'job_id': session.job_id,
+                    'user_id': str(session.user.id),
+                    'status': session.status,
+                    'progress': session.progress,
+                    'message': session.message,
+                    'error': session.error,
+                    'urls': session.urls,
+                    'started_at': session.started_at.isoformat(),
+                    'updated_at': session.updated_at.isoformat(),
+                    'completed_at': session.completed_at.isoformat() if session.completed_at else None
+                }
+            
+            return Response({
+                'active_session': serialize_session(active_session) if active_session else None,
+                'all_sessions': [serialize_session(session) for session in sessions[:10]]
+            })
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            user_id = int(data.get('user_id'))
+            job_id = data.get('job_id')
+            urls = data.get('urls', [])
+            
+            if not user_id or not job_id:
+                return Response({'error': 'user_id and job_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = User.objects.get(id=user_id)
+            
+            session = UserSession.objects.create(
+                job_id=job_id,
+                user=user,
+                urls=urls,
+                status=data.get('status', 'pending'),
+                progress=data.get('progress', 0)
+            )
+            
+            return Response({
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'status': session.status,
+                'progress': session.progress,
+                'urls': session.urls,
+                'started_at': session.started_at.isoformat(),
+                'updated_at': session.updated_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        except json.JSONDecodeError:
+            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+@csrf_exempt
+@api_view(['PATCH', 'DELETE'])
+def user_session_detail_view(request, job_id):
+    try:
+        session = UserSession.objects.get(job_id=job_id)
+        
+        if request.method == 'PATCH':
+            data = json.loads(request.body)
+            
+            if 'status' in data:
+                session.status = data['status']
+            if 'progress' in data:
+                session.progress = data['progress']
+            if 'message' in data:
+                session.message = data['message']
+            if 'error' in data:
+                session.error = data['error']
+            
+            if data.get('status') == 'completed':
+                session.completed_at = timezone.now()
+            
+            session.save()
+            
+            return Response({
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'status': session.status,
+                'progress': session.progress,
+                'message': session.message,
+                'error': session.error,
+                'urls': session.urls,
+                'started_at': session.started_at.isoformat(),
+                'updated_at': session.updated_at.isoformat(),
+                'completed_at': session.completed_at.isoformat() if session.completed_at else None
+            })
+        
+        elif request.method == 'DELETE':
+            session.delete()
+            return Response({'success': True}, status=status.HTTP_204_NO_CONTENT)
+            
+    except UserSession.DoesNotExist:
+        return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+# Crawl Sessions
+@csrf_exempt
+@api_view(['GET', 'POST'])
+def crawl_sessions_view(request):
+    if request.method == 'GET':
+        user_id = request.GET.get('user_id')
+        limit = int(request.GET.get('limit', 10))
+        
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id)
+                sessions = CrawlSession.objects.filter(user=user)[:limit]
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            sessions = CrawlSession.objects.all()[:limit]
+        
+        def serialize_crawl_session(session):
+            return {
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'urls': session.urls,
+                'status': session.status,
+                'progress': session.progress,
+                'results': session.results,
+                'error': session.error,
+                'created_at': session.created_at.isoformat(),
+                'updated_at': session.updated_at.isoformat()
+            }
+        
+        return Response({
+            'results': [serialize_crawl_session(session) for session in sessions]
+        })
+    
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            user_id = data.get('user_id', 'default')
+            job_id = data.get('job_id')
+            urls = data.get('urls', [])
+            
+            if not job_id:
+                return Response({'error': 'job_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Try to get user, create default if needed
+            try:
+                if user_id == 'default':
+                    user, created = User.objects.get_or_create(
+                        username='default_user',
+                        defaults={'email': 'default@example.com'}
+                    )
+                else:
+                    user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            session = CrawlSession.objects.create(
+                job_id=job_id,
+                user=user,
+                urls=urls,
+                status=data.get('status', 'pending'),
+                progress=data.get('progress', 0)
+            )
+            
+            return Response({
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'urls': session.urls,
+                'status': session.status,
+                'progress': session.progress,
+                'created_at': session.created_at.isoformat(),
+                'updated_at': session.updated_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+            
+        except json.JSONDecodeError:
+            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+@csrf_exempt
+@api_view(['GET', 'PATCH', 'DELETE'])
+def crawl_session_detail_view(request, session_id):
+    try:
+        session = CrawlSession.objects.get(id=session_id)
+        
+        if request.method == 'GET':
+            return Response({
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'urls': session.urls,
+                'status': session.status,
+                'progress': session.progress,
+                'results': session.results,
+                'error': session.error,
+                'created_at': session.created_at.isoformat(),
+                'updated_at': session.updated_at.isoformat()
+            })
+        
+        elif request.method == 'PATCH':
+            data = json.loads(request.body)
+            
+            if 'status' in data:
+                session.status = data['status']
+            if 'progress' in data:
+                session.progress = data['progress']
+            if 'results' in data:
+                session.results = data['results']
+            if 'error' in data:
+                session.error = data['error']
+            
+            session.save()
+            
+            return Response({
+                'id': str(session.id),
+                'job_id': session.job_id,
+                'user_id': str(session.user.id),
+                'urls': session.urls,
+                'status': session.status,
+                'progress': session.progress,
+                'results': session.results,
+                'error': session.error,
+                'created_at': session.created_at.isoformat(),
+                'updated_at': session.updated_at.isoformat()
+            })
+        
+        elif request.method == 'DELETE':
+            session.delete()
+            return Response({'success': True}, status=status.HTTP_204_NO_CONTENT)
+            
+    except CrawlSession.DoesNotExist:
+        return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import ScheduledJob
+from .serializers import ScheduledJobSerializer
+
+@api_view(['GET', 'POST'])
+def scheduled_jobs_view(request):
+    if request.method == 'GET':
+        jobs = ScheduledJob.objects.all()
+        serializer = ScheduledJobSerializer(jobs, many=True)
+        return Response(serializer.data)
+    elif request.method == 'POST':
+        serializer = ScheduledJobSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+@api_view(['PUT', 'DELETE'])
+def scheduled_job_detail_view(request, pk):
+    try:
+        job = ScheduledJob.objects.get(pk=pk)
+    except ScheduledJob.DoesNotExist:
+        return Response({'error': 'Job not found'}, status=404)
+
+    if request.method == 'PUT':
+        serializer = ScheduledJobSerializer(job, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+    if request.method == 'DELETE':
+        job.delete()
+        return Response(status=204)

@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { UrlManager } from "./url-manager"
 import { CrawlerForm } from "./crawler-form"
+import { useAuthStore } from "@/lib/auth-store"
 
 interface CrawlerWithUrlManagerProps {
   onScrapeComplete: (jobId?: string) => void
 }
 
 export function CrawlerWithUrlManager({ onScrapeComplete }: CrawlerWithUrlManagerProps) {
+  const { user } = useAuthStore()
   const [crawlerUrls, setCrawlerUrls] = useState<string[]>([
     "https://www.nyjacket.com/",
     "https://www.californiajacket.com/",
@@ -42,7 +44,12 @@ export function CrawlerWithUrlManager({ onScrapeComplete }: CrawlerWithUrlManage
   return (
     <div className="space-y-6">
       <UrlManager onUrlSelect={handleUrlSelect} onMultipleUrlSelect={handleMultipleUrlSelect} />
-      <CrawlerForm urls={crawlerUrls} setUrls={setCrawlerUrls} onScrapeComplete={onScrapeComplete} />
+      <CrawlerForm
+        userId={user?.id}
+        urls={crawlerUrls}
+        setUrls={setCrawlerUrls}
+        onScrapeComplete={onScrapeComplete}
+      />
     </div>
   )
 }
