@@ -31,7 +31,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://172.16.0.2:3000",  # or wherever your frontend is running
     "http://167.172.143.147:3000",
-    "http://192.168.1.109:3000"
+    "http://192.168.1.109:3000",
+    "https://crawlerheytech.duckdns.org"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True  # ✅ for dev only
