@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Key } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +58,8 @@ interface ProductChangeData {
   created_at?: string
   changes?: {
     [field: string]: {
+      old_date: string | number | Date
+      change_date: string | number | Date
       old: any
       new: any
     }
@@ -1066,7 +1068,7 @@ export function ProductComparison({
                                       product.changes.details.old &&
                                       product.changes.details.old[key] !== undefined
 
-                                    const oldValue = hasChange ? product.changes.details.old[key] : "Not available"
+                                    const oldValue = hasChange ? product.changes?.details?.old?.[key] : "Not available"
                                     const newValue = value
 
                                     return (
@@ -1095,10 +1097,10 @@ export function ProductComparison({
                                                 <span>{String(oldValue)}</span>
                                               )}
                                             </div>
-                                            {hasChange && product.changes.details.old_date && (
+                                            {hasChange && product.changes?.details?.old_date && (
                                               <div className="text-xs text-red-600 flex items-center gap-1">
                                                 <Calendar className="h-3 w-3" />
-                                                {new Date(product.changes.details.old_date).toLocaleString()}
+                                                {product.changes?.details?.old_date && new Date(product.changes.details.old_date).toLocaleString()}
                                               </div>
                                             )}
                                           </div>
@@ -1126,7 +1128,7 @@ export function ProductComparison({
                                             </div>
                                             <div className="text-xs text-green-600 flex items-center gap-1">
                                               <Calendar className="h-3 w-3" />
-                                              {new Date(product.change_date).toLocaleString()}
+                                              {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
                                             </div>
                                           </div>
                                         </td>
@@ -1155,11 +1157,11 @@ export function ProductComparison({
                                       <div className="space-y-1">
                                         <div className="flex gap-2 overflow-x-auto pb-2">
                                           {product.changes?.details?.old?.["Thumbnail Images"] ? (
-                                            product.changes.details.old["Thumbnail Images"].map((img, i) => (
+                                            product.changes.details.old["Thumbnail Images"].map((img: any, idx: number) => (
                                               <img
-                                                key={i}
+                                                key={idx}
                                                 src={img || "/placeholder.svg"}
-                                                alt={`Previous thumbnail ${i + 1}`}
+                                                alt={`Previous thumbnail ${idx + 1}`}
                                                 className="w-12 h-12 object-cover rounded border flex-shrink-0"
                                                 onError={(e) => {
                                                   e.currentTarget.src = "/placeholder.svg?height=48&width=48"
@@ -1195,7 +1197,7 @@ export function ProductComparison({
                                         </div>
                                         <div className="text-xs text-green-600 flex items-center gap-1">
                                           <Calendar className="h-3 w-3" />
-                                          {new Date(product.change_date).toLocaleString()}
+                                          {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
                                         </div>
                                       </div>
                                     </td>
@@ -1226,7 +1228,9 @@ export function ProductComparison({
                               </div>
                               <div>
                                 <span className="font-medium text-gray-700">Last Updated:</span>
-                                <div className="text-gray-600">{new Date(product.change_date).toLocaleString()}</div>
+                                <div className="text-gray-600">
+                                  {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
+                                </div>
                               </div>
                               <div>
                                 <span className="font-medium text-gray-700">Changes Detected:</span>

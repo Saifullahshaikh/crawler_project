@@ -336,9 +336,9 @@ export function ProductComparisonSampleView() {
                                 const hasChange =
                                   product.changes?.details &&
                                   product.changes.details.old &&
-                                  product.changes.details.old[key] !== undefined
+                                  (product.changes.details.old as Record<string, unknown>)[key] !== undefined
 
-                                const oldValue = hasChange ? product.changes.details.old[key] : "Not available"
+                                const oldValue = hasChange ? (product.changes.details.old as Record<string, unknown>)[key] : "Not available"
                                 const newValue = value
 
                                 return (

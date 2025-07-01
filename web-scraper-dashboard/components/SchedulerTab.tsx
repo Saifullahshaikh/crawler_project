@@ -13,13 +13,22 @@ import { useAuthStore } from "@/lib/auth-store"
 
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-export function SchedulerTab({ userId }) {
+type Job = {
+  id: string;
+  urls: string[];
+  scheduled_hour: number;
+  scheduled_minute: number;
+  repeat_days: string[];
+  // Add other fields as needed
+};
+
+export function SchedulerTab({ userId }: { userId: string }) {
   const [scheduledHour, setScheduledHour] = useState("")
   const [scheduledMinute, setScheduledMinute] = useState("")
   const [urls, setUrls] = useState([""])
-  const [repeatDays, setRepeatDays] = useState([])
-  const [editingId, setEditingId] = useState(null)
-  const [jobs, setJobs] = useState([])
+  const [repeatDays, setRepeatDays] = useState<string[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [jobs, setJobs] = useState<Job[]>([])
   const { showManualButton, setShowManualButton } = useUIStore()
   const { activeSession, isLoading, error, fetchSessions } = useDjangoSession()
 
@@ -67,7 +76,7 @@ export function SchedulerTab({ userId }) {
     }
   }
 
-  const handleEdit = (job) => {
+  const handleEdit = (job: { id: any; urls: any; scheduled_hour: any; scheduled_minute: any; repeat_days: any }) => {
     setEditingId(job.id)
     setUrls(job.urls)
     setScheduledHour(job.scheduled_hour?.toString() || "")
@@ -98,7 +107,7 @@ export function SchedulerTab({ userId }) {
     }
   }
 
-  const toggleDay = (day, checked) => {
+  const toggleDay = (day: string, checked: boolean) => {
     if (checked) setRepeatDays([...repeatDays, day])
     else setRepeatDays(repeatDays.filter(d => d !== day))
   }

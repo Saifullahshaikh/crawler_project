@@ -126,9 +126,9 @@ export const useScrapingStore = create<ScrapingState>()(
     }),
     {
       name: "scraping-store",
-      onRehydrationComplete: (state) => {
-        // Initialize default URLs after rehydration if no URLs exist
-        if (state.savedUrls.length === 0) {
+      // Use onRehydrateStorage to initialize default URLs after rehydration
+      onRehydrateStorage: () => (state) => {
+        if (state && state.savedUrls.length === 0) {
           state.initializeDefaultUrls()
         }
       },

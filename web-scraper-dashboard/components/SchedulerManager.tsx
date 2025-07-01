@@ -5,10 +5,20 @@ import djangoApiService from "@/lib/django-api-service"
 import { useDjangoSession } from "@/hooks/use-django-session"
 
 
-export function SchedulerManager({ userId }) {
+type Job = {
+  id: number
+  last_run?: string
+  scheduled_hour: number | string
+  scheduled_minute: number | string
+  repeat_days?: string[]
+  urls: string[]
+  user: number
+}
+
+export function SchedulerManager({ userId }: { userId: number }) {
   const { activeSession, isLoading, error, fetchSessions } = useDjangoSession()
-  const [jobs, setJobs] = useState([])
-  const jobsRef = useRef([])
+  const [jobs, setJobs] = useState<Job[]>([])
+  const jobsRef = useRef<Job[]>([])
   console.log("User ID from SchedulerManager:", userId)
 
   const fetchJobs = async () => {
@@ -44,7 +54,7 @@ export function SchedulerManager({ userId }) {
 
       console.log(`Checking job #${job.id} - Is time: ${isTime} - Should run: ${shouldRunToday} - Not run today: ${notRunToday}`)
 
-      const response = await djangoApiService.getUserSessions(userId)
+      const response = await djangoApiService.getUserSessions(String(userId))
       console.log(`Active session for user ${userId}:`, response)
 
       if (isTime && shouldRunToday && notRunToday && response.active_session == null) {
@@ -63,7 +73,7 @@ export function SchedulerManager({ userId }) {
 
           await djangoApiService.createUserSession({
             job_id: jobId,
-            user_id: job.user,
+            user_id: String(job.user),
             urls: job.urls,
             status: "running",
           })

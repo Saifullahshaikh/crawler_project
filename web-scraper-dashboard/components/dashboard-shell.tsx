@@ -129,7 +129,7 @@ export function DashboardShell() {
                 <CardDescription>View your previous crawling sessions and results</CardDescription>
               </CardHeader>
               <CardContent>
-                <SchedulerTab userId={user.id}/>
+                <SchedulerTab userId={user?.id ?? ""}/>
               </CardContent>
             </Card>
             

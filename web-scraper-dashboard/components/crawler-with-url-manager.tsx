@@ -45,7 +45,7 @@ export function CrawlerWithUrlManager({ onScrapeComplete }: CrawlerWithUrlManage
     <div className="space-y-6">
       <UrlManager onUrlSelect={handleUrlSelect} onMultipleUrlSelect={handleMultipleUrlSelect} />
       <CrawlerForm
-        userId={user?.id}
+        userId={user?.id ?? ""}
         urls={crawlerUrls}
         setUrls={setCrawlerUrls}
         onScrapeComplete={onScrapeComplete}

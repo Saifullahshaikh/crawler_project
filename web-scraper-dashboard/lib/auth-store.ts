@@ -134,8 +134,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-store",
-      onRehydrationComplete: (state) => {
-        state.checkAuth()
+      // Use onRehydrateStorage to trigger checkAuth after rehydration
+      onRehydrateStorage: () => (state) => {
+        if (state && typeof state.checkAuth === "function") {
+          state.checkAuth()
+        }
       },
     },
   ),
