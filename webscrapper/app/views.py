@@ -384,11 +384,12 @@ def health_check(request):
 @api_view(['GET', 'POST'])
 def user_sessions_view(request):
     if request.method == 'GET':
-        user_id = int(request.GET.get('user_id'))
-        if not user_id:
+        user_id_param = request.GET.get('user_id')
+        if not user_id_param:
             return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            user_id = int(user_id_param)
             user = User.objects.get(id=user_id)
             sessions = UserSession.objects.filter(user=user)
             
