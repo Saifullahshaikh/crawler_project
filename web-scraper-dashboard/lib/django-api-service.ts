@@ -75,7 +75,10 @@ class DjangoApiService {
   }
 
   async getSessionStatus() {
-    return this.apiCall("/auth/session-status/")
+    return this.apiCall("/auth/session-status/", {
+      method: "GET",
+      credentials: "include",
+    });
   }
 
   async healthCheck() {
@@ -100,10 +103,20 @@ class DjangoApiService {
   }
 
   async updateUserSession(jobId: string, updates: any): Promise<UserSession> {
+    console.log("Updating user session:------------>", jobId, "with updates:", updates)
+    const csrfToken = getCookie("csrftoken");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (csrfToken) {
+      headers["X-CSRFToken"] = csrfToken;
+    }
     return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "PATCH",
+      headers,
+      credentials: "include", // Important for session auth (sends cookies)
       body: JSON.stringify(updates),
-    })
+    });
   }
 
   async deleteUserSession(jobId: string): Promise<{ success: boolean }> {
@@ -148,3 +161,14 @@ class DjangoApiService {
 export const djangoApiService = new DjangoApiService()
 export { DjangoApiService }
 export default djangoApiService
+
+
+
+function getCookie(name: string): string | null {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop()!.split(";").shift()!;
+  }
+  return null;
+}

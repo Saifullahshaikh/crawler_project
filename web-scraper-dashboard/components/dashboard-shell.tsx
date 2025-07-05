@@ -125,7 +125,7 @@ export function DashboardShell() {
           <TabsContent value="scheduler">
             <Card>
               <CardHeader>
-                <CardTitle>Crawk Scheduler</CardTitle>
+                <CardTitle>Crawl Scheduler</CardTitle>
                 <CardDescription>View your previous crawling sessions and results</CardDescription>
               </CardHeader>
               <CardContent>

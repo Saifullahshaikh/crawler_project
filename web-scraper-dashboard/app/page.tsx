@@ -63,7 +63,7 @@ function DashboardContent() {
       <UrlManager onUseSelected={handleUseSelected} />
 
       {/* Crawler Form with controlled URLs */}
-      <CrawlerForm urls={crawlerUrls} setUrls={setCrawlerUrls} onScrapeComplete={handleScrapeComplete} />
+      <CrawlerForm setUrls={setCrawlerUrls} onScrapeComplete={handleScrapeComplete} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CategoryLinks key={`category-${refreshTrigger}`} />
@@ -83,7 +83,7 @@ export default function HomePage() {
   return (
     <ProtectedRoute>
       <DashboardShell />
-      <SchedulerManager userId={user?.id} />
+      {/* <SchedulerManager userId={user?.id} /> */}
     </ProtectedRoute>
   )
 }

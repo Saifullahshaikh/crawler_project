@@ -57,6 +57,13 @@ INSTALLED_APPS = [
     "corsheaders",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+SESSION_COOKIE_SAMESITE = "Lax"  # Or "None" if you use HTTPS
+SESSION_COOKIE_SECURE = False    #
+
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',

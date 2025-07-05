@@ -32,6 +32,11 @@ import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
 import { serverConfig } from "@/lib/config"
+import { useSessionStore } from "@/lib/session-store"
+
+
+
+
 
 interface ProductDetails {
   "Image URL"?: string
@@ -95,13 +100,18 @@ export function ProductComparison({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const { toast } = useToast()
 
+  const {
+      activeUserSession,
+    } = useSessionStore()
+
+  console.log("Active User Session:", activeUserSession?.job_id)
   const fetchComparisonData = async (specificJobId?: string) => {
     setIsLoading(true)
 
     console.log("Django API URL:", process.env.NEXT_PUBLIC_DJANGO_API_URL)
 
     try {
-      const url = `${process.env.NEXT_PUBLIC_DJANGO_API_URL}/product-changes/?jobId=${specificJobId}`
+      const url = `${process.env.NEXT_PUBLIC_DJANGO_API_URL}/product-changes/?jobId=${activeUserSession?.job_id || specificJobId}`
 
       const response = await fetch(url)
       const data = await response.json()
@@ -748,6 +758,16 @@ export function ProductComparison({
     ? comparisonData.new.length + comparisonData.updated.length + comparisonData.removed.length
     : 0
 
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowTooltip(true);
+    }, 30000); // 30 seconds
+
+    return () => clearTimeout(timer); // clean up
+  }, []);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -784,14 +804,29 @@ export function ProductComparison({
               Clear Job
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => fetchComparisonData(currentJobId || undefined)}
-            disabled={isLoading}
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
+          <div className="relative inline-block">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                fetchComparisonData(currentJobId || undefined);
+                setShowTooltip(false); // hide tooltip after clicking
+              }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+
+            {showTooltip && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-10 w-max bg-gray-800 text-white text-sm px-3 py-2 rounded shadow-lg animate-fadeIn">
+                Refresh to see latest changes
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>

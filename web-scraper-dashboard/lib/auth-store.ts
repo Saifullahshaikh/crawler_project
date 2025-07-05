@@ -20,7 +20,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
 }
 
-// Hardcoded credentials for demo
+// Hardcoded demo credentials
 const DEMO_CREDENTIALS = {
   username: "admin",
   email: "admin@webcrawler.com",
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
 
         try {
-          // First try demo credentials
+          // Demo mode
           if (
             (username === DEMO_CREDENTIALS.username || username === DEMO_CREDENTIALS.email) &&
             password === DEMO_CREDENTIALS.password
@@ -56,10 +56,11 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             })
+
             return true
           }
 
-          // Try Django API authentication
+          // Django login API
           const response = await djangoApiService.login(username, password)
 
           if (response.success && response.user) {
@@ -68,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             })
+
             return true
           }
 
@@ -84,7 +86,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
 
         try {
-          // Try to logout from Django API
           await djangoApiService.logout()
         } catch (error) {
           console.error("Logout error:", error)
@@ -98,48 +99,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       checkAuth: async () => {
-        const { user } = get()
-        if (!user) {
-          set({ isAuthenticated: false })
-          return
-        }
-
         try {
-          // Check with Django API if session is still valid
-          const response = await djangoApiService.getSessionStatus()
-          if (response.authenticated && response.user) {
-            set({
-              user: response.user,
-              isAuthenticated: true,
-            })
+          const res = await djangoApiService.getSessionStatus()
+
+
+          if (res?.authenticated && res.user) {
+            set({ isAuthenticated: true, user: res.user })
           } else {
-            set({
-              user: null,
-              isAuthenticated: false,
-            })
+            set({ isAuthenticated: false, user: null })
           }
         } catch (error) {
-          console.error("Auth check error:", error)
-          // Keep demo user authenticated even if Django API is down
-          if (user.id === "2") {
-            set({ isAuthenticated: true })
-          } else {
-            set({
-              user: null,
-              isAuthenticated: false,
-            })
-          }
+          console.error("checkAuth error:", error)
+          set({ isAuthenticated: false, user: null })
         }
       },
     }),
     {
       name: "auth-store",
-      // Use onRehydrateStorage to trigger checkAuth after rehydration
       onRehydrateStorage: () => (state) => {
-        if (state && typeof state.checkAuth === "function") {
-          state.checkAuth()
-        }
+        state?.checkAuth?.()
       },
-    },
-  ),
+    }
+  )
 )

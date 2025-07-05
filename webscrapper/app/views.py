@@ -14,54 +14,67 @@ from django.shortcuts import render
 from django.http import QueryDict
 from .scrapper import ProductDataScraper
 from .crawler import crawl_links_recursively
-# from .crawler import crawl_website
 from django.core.exceptions import ObjectDoesNotExist
-
-
 from .models import ProductChangeLog
-from .utils import save_crawled_data_to_db
 import json
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import permission_classes
 
 jobs = {}
+
 
 # def run_crawler(job_id, urls):
 #     job_dir = f"jobs/{job_id}"
 #     os.makedirs(job_dir, exist_ok=True)
 
 #     jobs[job_id]["status"] = "running"
-    
 #     all_category_links = []
 #     all_product_data = []
 
+
 #     for i, url in enumerate(urls):
-#         category_output = f"{job_dir}/category_links_{i}.json"
-#         product_output = f"{job_dir}/product_data_{i}.json"
+#         try:
+#             category_output = f"{job_dir}/category_links_{i}.json"
+#             product_output = f"{job_dir}/product_data_{i}.json"
 
-#         crawl_links_recursively(url, category_output)
+#             # Crawl category links
+#             crawl_links_recursively(url, category_output, job_id=job_id)
 
-#         scraper = ProductDataScraper(category_output)
-#         scraper.scrape_all_urls()
-#         scraper.save_to_json(product_output)
+#             # Load category links for this url
+#             with open(category_output, 'r') as f:
+#                 category_links = json.load(f)
+#                 all_category_links.extend(category_links)
 
-#         with open(category_output, 'r') as f:
-#             category_links = json.load(f)
-#             all_category_links.extend(category_links)
+#             # # Scrape product data
+#             # scraper = ProductDataScraper(category_output)
+#             # scraper.scrape_all_urls()
 
-#         with open(product_output, 'r') as f:
-#             product_data = json.load(f)
-#             all_product_data.extend(product_data)
+#             # # Save intermediate product data
+#             # scraper.save_to_json(product_output)
 
-#         jobs[job_id]["progress"] = int((i + 1) / len(urls) * 100)
+#             with open(product_output, 'r') as f:
+#                 product_data = json.load(f)
+#                 all_product_data.extend(product_data)
 
+#             # Persist data to DB immediately after scraping this URL
+#             # save_crawled_data_to_db(job_id, [url], product_data)
+
+#             # Update progress
+#             jobs[job_id]["progress"] = int((i + 1) / len(urls) * 100)
+
+#         except Exception as e:
+#             # Log error but continue to next url
+#             print(f"Error processing URL {url}: {e}")
+
+#     # Save final aggregated files (optional but good)
 #     with open(f"{job_dir}/all_category_links.json", 'w') as f:
 #         json.dump(all_category_links, f, indent=2)
 
 #     with open(f"{job_dir}/all_product_data.json", 'w') as f:
 #         json.dump(all_product_data, f, indent=2)
 
-    
-
-#     save_crawled_data_to_db(job_id, urls, all_product_data)
+#     # Save entire dataset to DB again (optional full backup)
+#     # save_crawled_data_to_db(job_id, urls, all_product_data)
 
 #     jobs[job_id]["status"] = "completed"
 #     jobs[job_id]["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -76,6 +89,7 @@ def run_crawler(job_id, urls):
     os.makedirs(job_dir, exist_ok=True)
 
     jobs[job_id]["status"] = "running"
+
     all_category_links = []
     all_product_data = []
 
@@ -85,50 +99,81 @@ def run_crawler(job_id, urls):
             product_output = f"{job_dir}/product_data_{i}.json"
 
             # Crawl category links
-            crawl_links_recursively(url, category_output)
+            crawl_links_recursively(url, category_output, job_id=job_id)
 
-            # Load category links for this url
             with open(category_output, 'r') as f:
                 category_links = json.load(f)
                 all_category_links.extend(category_links)
 
-            # Scrape product data
-            scraper = ProductDataScraper(category_output)
-            scraper.scrape_all_urls()
+            # Uncomment when ready to scrape product data
+            # scraper = ProductDataScraper(category_output)
+            # scraper.scrape_all_urls()
+            # scraper.save_to_json(product_output)
 
-            # Save intermediate product data
-            scraper.save_to_json(product_output)
+            # Update progress and persist to file
+            progress = int((i + 1) / len(urls) * 100)
+            jobs[job_id]["progress"] = progress
+            update_job_file(job_id)
 
-            with open(product_output, 'r') as f:
-                product_data = json.load(f)
-                all_product_data.extend(product_data)
-
-            # Persist data to DB immediately after scraping this URL
-            save_crawled_data_to_db(job_id, [url], product_data)
-
-            # Update progress
-            jobs[job_id]["progress"] = int((i + 1) / len(urls) * 100)
+            # Update progress in UserSession if exists
+            try:
+                user_session = UserSession.objects.get(job_id=job_id)
+                user_session.progress = progress
+                user_session.save(update_fields=["progress"])
+            except UserSession.DoesNotExist:
+                pass
 
         except Exception as e:
-            # Log error but continue to next url
             print(f"Error processing URL {url}: {e}")
+            continue  # Continue with next URL
 
-    # Save final aggregated files (optional but good)
+    # Save aggregated output
     with open(f"{job_dir}/all_category_links.json", 'w') as f:
         json.dump(all_category_links, f, indent=2)
 
     with open(f"{job_dir}/all_product_data.json", 'w') as f:
         json.dump(all_product_data, f, indent=2)
 
-    # Save entire dataset to DB again (optional full backup)
-    # save_crawled_data_to_db(job_id, urls, all_product_data)
-
+    # Finalize job status
     jobs[job_id]["status"] = "completed"
+    jobs[job_id]["progress"] = 100  # Ensure progress is 100% on completion
     jobs[job_id]["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     jobs[job_id]["results"] = {
         "categoryLinks": all_category_links,
         "productData": all_product_data
     }
+    update_job_file(job_id)
+
+
+# @csrf_exempt
+# @require_http_methods(["POST"])
+# def start_crawl(request):
+#     try:
+#         data = json.loads(request.body)
+#         urls = data.get("urls")
+#     except Exception:
+#         return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+#     if not urls or not isinstance(urls, list) or len(urls) == 0:
+#         return JsonResponse({"error": "At least one URL is required"}, status=400)
+
+#     job_id = str(uuid.uuid4())
+#     jobs[job_id] = {
+#         "id": job_id,
+#         "urls": urls,
+#         "status": "pending",
+#         "progress": 0,
+#         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+#     }
+
+#     thread = threading.Thread(target=run_crawler, args=(job_id, urls))
+#     thread.start()
+
+#     return JsonResponse({
+#         "status": "success",
+#         "message": f"Crawling started for {len(urls)} URL(s)",
+#         "jobId": job_id
+#     })
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -143,14 +188,21 @@ def start_crawl(request):
         return JsonResponse({"error": "At least one URL is required"}, status=400)
 
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {
+    job_data = {
         "id": job_id,
         "urls": urls,
-        "status": "pending",
+        "status": "failed",  # Default to failed
         "progress": 0,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
 
+    os.makedirs("jobs", exist_ok=True)
+    with open(f"jobs/{job_id}_meta.json", "w") as f:
+        json.dump(job_data, f, indent=2)
+
+    jobs[job_id] = job_data
+
+    # Start the crawling thread
     thread = threading.Thread(target=run_crawler, args=(job_id, urls))
     thread.start()
 
@@ -160,11 +212,27 @@ def start_crawl(request):
         "jobId": job_id
     })
 
+def update_job_file(job_id):
+    job_meta_path = f"jobs/{job_id}_meta.json"
+    with open(job_meta_path, 'w') as f:
+        json.dump(jobs[job_id], f, indent=2)
+
+
+
 @require_http_methods(["GET"])
 def get_job_status(request):
     job_id = request.GET.get("jobId")
-    if not job_id or job_id not in jobs:
-        return JsonResponse({"error": "Invalid job ID"}, status=400)
+    if not job_id:
+        return JsonResponse({"error": "Missing job ID"}, status=400)
+
+    if job_id not in jobs:
+        # Try to load from disk
+        job_meta_path = f"jobs/{job_id}_meta.json"
+        if os.path.exists(job_meta_path):
+            with open(job_meta_path, "r") as f:
+                jobs[job_id] = json.load(f)
+        else:
+            return JsonResponse({"error": "Invalid job ID"}, status=400)
 
     job = jobs[job_id]
     return JsonResponse({
@@ -364,6 +432,7 @@ def profile_view(request):
 @api_view(['GET'])
 def session_status_view(request):
     return Response({
+        
         'authenticated': request.user.is_authenticated,
         'user': {
             'id': str(request.user.id),
@@ -458,6 +527,7 @@ def user_sessions_view(request):
 
 @csrf_exempt
 @api_view(['PATCH', 'DELETE'])
+@permission_classes([AllowAny])
 def user_session_detail_view(request, job_id):
     try:
         session = UserSession.objects.get(job_id=job_id)

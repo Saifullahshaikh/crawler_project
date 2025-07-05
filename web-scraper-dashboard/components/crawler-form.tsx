@@ -33,10 +33,7 @@ interface CrawlerFormProps {
 }
 
 export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setUrls: setExternalUrls }: CrawlerFormProps) {
-  const [internalUrls, setInternalUrls] = useState<string[]>([
-    "https://www.nyjacket.com/",
-    "https://www.californiajacket.com/",
-    "https://wonderjackets.com/",
+  const [internalUrls, setInternalUrls] = useState<string[]>([""
   ])
 
   const urls = externalUrls || internalUrls
@@ -176,51 +173,6 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
     }
   }
 
-  // const pollJobStatus = async (jobId: string) => {
-  //   try {
-  //     const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/status?jobId=${jobId}`)
-  //     const data = await response.json()
-  //     if (!response.ok) throw new Error(data.error || "Failed to get job status")
-
-  //     setStatus({
-  //       status: data.status,
-  //       progress: data.progress,
-  //       message: data.message || getStatusMessage(data.status, data.progress),
-  //       error: data.error,
-  //     })
-
-  //     if (data.status === "completed") {
-  //       setIsLoading(false)
-  //       toast({
-  //         title: "Crawling completed",
-  //         description: `Found ${data.categoryLinks?.length || 0} category links and ${data.productData?.length || 0} products`,
-  //       })
-  //       onScrapeComplete?.(jobId)
-  //     } else if (data.status === "failed") {
-  //       setIsLoading(false)
-  //       toast({
-  //         title: "Crawling failed",
-  //         description: data.error || "Failed to crawl website",
-  //         variant: "destructive",
-  //       })
-  //     } else {
-  //       pollingRef.current = setTimeout(() => pollJobStatus(jobId), 2000)
-  //     }
-  //   } catch (error) {
-  //     setStatus({
-  //       status: "failed",
-  //       progress: 0,
-  //       error: error instanceof Error ? error.message : "Failed to get job status",
-  //     })
-  //     toast({
-  //       title: "Error",
-  //       description: error instanceof Error ? error.message : "Failed to get job status",
-  //       variant: "destructive",
-  //     })
-  //     setIsLoading(false)
-  //   }
-  // }
-
   const pollJobStatus = async (jobId: string) => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/status?jobId=${jobId}`)
@@ -259,7 +211,7 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
       })
 
       onScrapeComplete?.(jobId)
-
+      console.log("Crawling failed:", data.status)
     // --- ✅ Handle Failure ---
     } else if (data.status === "failed") {
       await djangoApiService.updateUserSession(jobId, {
@@ -338,7 +290,7 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
     <Card>
       <CardHeader>
         <CardTitle>Website Crawler</CardTitle>
-        <CardDescription>Enter one or more website URLs to crawl for category links and product data</CardDescription>
+        <CardDescription>Crawling Status and Progress</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -350,7 +302,7 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
                   placeholder="https://example.com"
                   value={url}
                   onChange={(e) => handleUrlChange(index, e.target.value)}
-                  disabled={isLoading}
+                  disabled={true}
                   className="flex-1"
                 />
                 {url.trim() && (
@@ -366,26 +318,26 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
               </div>
             ))}
           </div>
-
+          
+           {isLoading ? (
           <div className="flex flex-col sm:flex-row gap-2">
-            <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
+            {/* <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
               <PlusCircle className="h-4 w-4" />
               Add URL
-            </Button>
+            </Button> */}
             {showManualButton && (
             <Button type="submit" disabled={isLoading} className="ml-auto">
-              {isLoading ? (
+             
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Crawling...
                 </>
-              ) : (
-                `Start Crawling (${urls.filter((u) => u.trim() !== "").length} URL${urls.filter((u) => u.trim() !== "").length !== 1 ? "s" : ""})`
-              )}
             </Button>
             )}
           </div>
-
+          ): (
+                ``
+              )}
           {status && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between">
