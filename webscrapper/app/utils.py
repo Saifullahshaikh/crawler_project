@@ -44,8 +44,12 @@ def save_single_url_data_to_db(job_id, url_data):
         category_url = url_data['url']
         category, _ = Category.objects.get_or_create(url=category_url)
 
+        # Get all product URLs from the incoming data
+        product_urls = [p['product_url'] for p in url_data.get('products', [])]
+
+        # Fetch all existing products with those URLs (regardless of category)
         existing_products = {
-            p.product_url: p for p in Product.objects.filter(category=category)
+            p.product_url: p for p in Product.objects.filter(product_url__in=product_urls)
         }
 
         crawled_product_urls = set()
@@ -61,7 +65,6 @@ def save_single_url_data_to_db(job_id, url_data):
             if existing:
                 changes = {}
                 normalized_existing_price = normalize_decimal(existing.price)
-
                 last_change_date_str = existing.change_date.isoformat() if existing.change_date else None
 
                 if normalized_existing_price != normalized_new_price:
@@ -102,6 +105,7 @@ def save_single_url_data_to_db(job_id, url_data):
                 existing.price = normalized_new_price
                 existing.details = product['product_details']
                 existing.image_url = product['image_url']
+                existing.category = category  # optional: update to new category
                 existing.crawl_job = crawl_job
                 existing.change_date = now()
                 save_with_reconnect(existing.save)
@@ -134,11 +138,25 @@ def save_single_url_data_to_db(job_id, url_data):
                             }
                         )
                 except IntegrityError:
-                    logger.warning(f"Duplicate product_url detected: {product_url}, skipping insert.")
+                    logger.warning(f"Duplicate product_url detected during insert: {product_url}")
+                    # Optionally update if race condition caused the failure
+                    existing = Product.objects.get(product_url=product_url)
+                    existing.name = product['name']
+                    existing.price = normalized_new_price
+                    existing.details = product['product_details']
+                    existing.image_url = product['image_url']
+                    existing.category = category
+                    existing.crawl_job = crawl_job
+                    existing.change_date = now()
+                    save_with_reconnect(existing.save)
 
-        # Remove products for this category that were not in this crawl
-        for url, product in existing_products.items():
-            if url not in crawled_product_urls:
+        # Remove products that existed in the DB but were not in this crawl
+        existing_product_urls = set(existing_products.keys())
+        stale_urls = existing_product_urls - crawled_product_urls
+
+        for url in stale_urls:
+            product = existing_products[url]
+            if product.category == category:  # only delete if it belongs to this category
                 save_with_reconnect(ProductChangeLog.objects.create,
                     crawl_job=crawl_job,
                     change_type='removed',
