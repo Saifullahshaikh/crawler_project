@@ -19,7 +19,7 @@ services:
       dockerfile: Dockerfile
     command: >
       sh -c "python manage.py migrate &&
-             gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1"
+             gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1 --timeout 120"
     volumes:
       - ./webscrapper:/app
     ports:
@@ -33,7 +33,6 @@ services:
       - DB_NAME=scrapper
       - DB_USER=postgres
       - DB_PASSWORD=12345678
-
 
   frontend:
     build:
