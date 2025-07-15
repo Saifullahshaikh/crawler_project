@@ -1,39 +1,33 @@
 version: "3.9"
-
 services:
-  db:
-    image: postgres:15
-    restart: always
-    environment:
-      POSTGRES_DB: scrapper
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345678
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
-
   web:
     build:
       context: ./webscrapper
       dockerfile: Dockerfile
     command: >
       sh -c "python manage.py migrate &&
-             gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=1 --threads=1"
+             gunicorn webscrapper.wsgi:application --bind 0.0.0.0:8000 --workers=3 --threads=2 --timeout 1000 --max-requests=1000 --max-requests-jitter=50"
     volumes:
       - ./webscrapper:/app
     ports:
       - "8000:8000"
     shm_size: '1gb'  # 👈 prevents Chrome crash due to /dev/shm
-    depends_on:
-      - db
     environment:
-      - DB_HOST=db
+      - DB_HOST=localhost
       - DB_PORT=5432
       - DB_NAME=scrapper
       - DB_USER=postgres
       - DB_PASSWORD=12345678
-
+      # Python/Django memory optimization
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=webscrapper.settings
+    # Memory limits for web scraper
+    mem_limit: 1.5g
+    mem_reservation: 800m
+    memswap_limit: 1.5g
+    # CPU limits to prevent overwhelming the system
+    cpus: "0.8"
+    restart: unless-stopped
 
   frontend:
     build:
@@ -41,6 +35,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-
-volumes:
-  postgres_data:
+    # Memory limits for frontend
+    mem_limit: 400m
+    mem_reservation: 200m
+    memswap_limit: 400m
+    # CPU limits
+    cpus: "0.3"
+    restart: unless-stopped
+    depends_on:
+      - web
