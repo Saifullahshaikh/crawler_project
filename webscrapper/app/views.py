@@ -19,6 +19,7 @@ from .models import ProductChangeLog
 import json
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import permission_classes
+from .models import Product
 
 jobs = {}
 
@@ -321,13 +322,34 @@ def get_categories(request):
     latest_job = max(completed_jobs, key=lambda x: x["completedAt"])
     return JsonResponse({"categoryLinks": latest_job["results"]["categoryLinks"]})
 
+# @require_http_methods(["GET"])
+# def get_products(request):
+#     print(jobs)
+#     completed_jobs = [job for job in jobs.values() if job["status"] == "running"]
+#     if not completed_jobs:
+#         return JsonResponse({"productData": []})
+#     latest_job = max(completed_jobs, key=lambda x: x["completedAt"])
+#     return JsonResponse({"productData": latest_job["results"]["productData"]})
+
+
 @require_http_methods(["GET"])
 def get_products(request):
-    completed_jobs = [job for job in jobs.values() if job["status"] == "completed"]
-    if not completed_jobs:
-        return JsonResponse({"productData": []})
-    latest_job = max(completed_jobs, key=lambda x: x["completedAt"])
-    return JsonResponse({"productData": latest_job["results"]["productData"]})
+    products = Product.objects.select_related('category', 'crawl_job').all()
+    
+    product_data = []
+    for product in products:
+        product_data.append({
+            "name": product.name,
+            "price": product.price,
+            "product_url": product.product_url,
+            "image_url": product.image_url,
+            "details": product.details,
+            "category_url": product.category.url if product.category else None,
+            "crawl_job_id": product.crawl_job.job_id if product.crawl_job else None,
+            "change_date": product.change_date.isoformat(),
+        })
+
+    return JsonResponse({"productData": product_data})
 
 
 

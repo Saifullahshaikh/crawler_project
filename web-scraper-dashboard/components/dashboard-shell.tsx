@@ -14,6 +14,7 @@ import { SavedDataList } from "./saved-data-list"
 import { DatabaseManager } from "./database-manager"
 import { ProductComparison } from "./product-comparison"
 import { SchedulerTab } from "./SchedulerTab"
+import { ProductData } from "./product-data"
 
 
 
@@ -71,7 +72,7 @@ export function DashboardShell() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="crawler" className="flex items-center space-x-2">
               <Settings className="h-4 w-4" />
               <span>Crawler</span>
@@ -91,6 +92,10 @@ export function DashboardShell() {
             <TabsTrigger value="comparison" className="flex items-center space-x-2">
               <BarChart3 className="h-4 w-4" />
               <span>Comparison</span>
+            </TabsTrigger>
+            <TabsTrigger value="product_data" className="flex items-center space-x-2">
+              <BarChart3 className="h-4 w-4" />
+              <span>Products</span>
             </TabsTrigger>
             <TabsTrigger value="sessions" className="flex items-center space-x-2">
               <Settings className="h-4 w-4" />
@@ -161,13 +166,14 @@ export function DashboardShell() {
 
           <TabsContent value="comparison" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Product Comparison</CardTitle>
-                <CardDescription>Compare products and analyze changes over time</CardDescription>
-              </CardHeader>
-              <CardContent>
                 <ProductComparison refreshTrigger={refreshTrigger} completedJobId={completedJobId} />
-              </CardContent>
+            </Card>
+          </TabsContent>
+
+
+          <TabsContent value="product_data" className="space-y-6">
+            <Card>
+                 <ProductData key={`product-${refreshTrigger}`} />
             </Card>
           </TabsContent>
 

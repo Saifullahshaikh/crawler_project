@@ -68,7 +68,7 @@ class ProductDataScraper:
             # Pattern 2b: Also check for <ul class="products"> with <li> children
             ul_products = soup.find("ul", class_="products")
             if ul_products:
-                products_div += ul_products.find_all("li", recursive=False)
+                products_div = products_div or ul_products.find_all("li", recursive=False)    
             for product in products_div:
                 name_tag = (
                     product.find("p", class_=["name", "product-title"]) or
