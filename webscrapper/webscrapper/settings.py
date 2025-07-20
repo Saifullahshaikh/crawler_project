@@ -64,7 +64,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
-SESSION_COOKIE_SAMESITE = "Lax"  # Or "None" if you use HTTPS
+SESSION_COOKIE_SAMESITE = "None"  # Or "None" if you use HTTPS
 SESSION_COOKIE_SECURE = True    #
 
 MIDDLEWARE = [
