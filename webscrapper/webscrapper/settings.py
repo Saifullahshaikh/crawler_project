@@ -33,6 +33,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://167.172.143.147:3000",
     "http://192.168.1.109:3000",
     "https://crawlerheytech.duckdns.org"
+    'https://crawlerhytechbackend.duckdns.org',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True  # ✅ for dev only
@@ -59,7 +60,9 @@ INSTALLED_APPS = [
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
+    'https://crawlerhytechbackend.duckdns.org',
 ]
+
 
 SESSION_COOKIE_SAMESITE = "Lax"  # Or "None" if you use HTTPS
 SESSION_COOKIE_SECURE = False    #
