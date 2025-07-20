@@ -102,23 +102,19 @@ class DjangoApiService {
     })
   }
 
+
   async updateUserSession(jobId: string, updates: any): Promise<UserSession> {
-    console.log("Updating user session:------------>", jobId, "with updates:", updates)
-    const csrfToken = getCookie("csrftoken");
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (csrfToken) {
-      headers["X-CSRFToken"] = csrfToken;
-    }
+    console.log("Updating user session:", jobId, "with updates:", updates);
+
     return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "PATCH",
-      headers,
-      credentials: "include", // Important for session auth (sends cookies)
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // still required if you're using session-based auth
       body: JSON.stringify(updates),
     });
   }
-
   async deleteUserSession(jobId: string): Promise<{ success: boolean }> {
     return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "DELETE",
