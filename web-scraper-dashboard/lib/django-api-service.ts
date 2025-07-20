@@ -103,18 +103,21 @@ class DjangoApiService {
   }
 
   async updateUserSession(jobId: string, updates: any): Promise<UserSession> {
-    console.log("Updating user session:------------>", jobId, "with updates:", updates)
+    console.log("Updating user session:------------>", jobId, "with updates:", updates);
+
     const csrfToken = getCookie("csrftoken");
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (csrfToken) {
-      headers["X-CSRFToken"] = csrfToken;
+    if (!csrfToken) {
+      console.error("CSRF token not found!");
+      throw new Error("Missing CSRF token.");
     }
+
     return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "PATCH",
-      headers,
-      credentials: "include", // Important for session auth (sends cookies)
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken, // CSRF token for Django
+      },
+      credentials: "include", // Ensures cookies (sessionid, csrftoken) are sent
       body: JSON.stringify(updates),
     });
   }
