@@ -175,7 +175,7 @@ def get_driver():
     return driver
 
 
-def crawl_links_recursively(base_url, output_file, job_id=None):
+def crawl_links_recursively(base_url, job_id=None):
     driver = get_driver()
     visited = set()
     to_visit = [base_url]
@@ -249,7 +249,6 @@ def crawl_links_recursively(base_url, output_file, job_id=None):
 
             if is_valid:
                 try:
-                    save_url_to_json(output_file, current_url)
 
                     print(f"🔍 Scraping products for: {current_url}")
                     scraper = ProductDataScraper()
@@ -292,5 +291,4 @@ def crawl_links_recursively(base_url, output_file, job_id=None):
         driver.quit()
 
     print(f"\n✅ Total URLs crawled: {len(visited)}")
-    print(f"📁 Output saved to: {output_file}")
 

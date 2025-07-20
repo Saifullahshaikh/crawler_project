@@ -90,8 +90,7 @@ jobs = {}
 
 
 def run_crawler(job_id, urls):
-    job_dir = f"jobs/{job_id}"
-    os.makedirs(job_dir, exist_ok=True)
+
 
     jobs[job_id]["status"] = "running"
 
@@ -100,15 +99,11 @@ def run_crawler(job_id, urls):
 
     for i, url in enumerate(urls):
         try:
-            category_output = f"{job_dir}/category_links_{i}.json"
-            product_output = f"{job_dir}/product_data_{i}.json"
+
 
             # Crawl category links
-            crawl_links_recursively(url, category_output, job_id=job_id)
+            crawl_links_recursively(url, job_id=job_id)
 
-            with open(category_output, 'r') as f:
-                category_links = json.load(f)
-                all_category_links.extend(category_links)
 
             # Uncomment when ready to scrape product data
             # scraper = ProductDataScraper(category_output)
@@ -131,13 +126,6 @@ def run_crawler(job_id, urls):
         except Exception as e:
             print(f"Error processing URL {url}: {e}")
             continue  # Continue with next URL
-
-    # Save aggregated output
-    with open(f"{job_dir}/all_category_links.json", 'w') as f:
-        json.dump(all_category_links, f, indent=2)
-
-    with open(f"{job_dir}/all_product_data.json", 'w') as f:
-        json.dump(all_product_data, f, indent=2)
 
     # Finalize job status
     jobs[job_id]["status"] = "completed"
