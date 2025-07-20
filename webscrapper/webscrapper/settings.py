@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     'https://crawlerhytechbackend.duckdns.org',
+    'https://crawlerheytech.duckdns.org/'
 ]
 
 
