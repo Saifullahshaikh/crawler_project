@@ -6,7 +6,6 @@ import { useEffect, useState } from "react"
 import { useAuthStore } from "@/lib/auth-store"
 import { LoginForm } from "./login-form"
 import { Loader2 } from "lucide-react"
-import { djangoApiService } from "@/lib/django-api-service"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -20,11 +19,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const checkSession = async () => {
       setLoading(true)
       try {
-        // Check if we have a valid session with Django
-        const response = await djangoApiService.healthCheck()
-        console.log("Django API health check:", response)
-
-        // Check authentication status
         await checkAuth()
       } catch (error) {
         console.error("Session check failed:", error)
@@ -39,7 +33,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     checkSession()
-  }, [setLoading, checkAuth, user])
+  }, [setLoading, checkAuth]) // ✅ Removed `user` from dependencies
 
   if (isInitializing) {
     return (

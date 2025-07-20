@@ -20,7 +20,6 @@ interface AuthState {
   setLoading: (loading: boolean) => void
 }
 
-// Hardcoded demo credentials
 const DEMO_CREDENTIALS = {
   username: "admin",
   email: "admin@webcrawler.com",
@@ -40,7 +39,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
 
         try {
-          // Demo mode
           if (
             (username === DEMO_CREDENTIALS.username || username === DEMO_CREDENTIALS.email) &&
             password === DEMO_CREDENTIALS.password
@@ -60,7 +58,6 @@ export const useAuthStore = create<AuthState>()(
             return true
           }
 
-          // Django login API
           const response = await djangoApiService.login(username, password)
 
           if (response.success && response.user) {
@@ -102,7 +99,6 @@ export const useAuthStore = create<AuthState>()(
         try {
           const res = await djangoApiService.getSessionStatus()
 
-
           if (res?.authenticated && res.user) {
             set({ isAuthenticated: true, user: res.user })
           } else {
@@ -110,14 +106,23 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error) {
           console.error("checkAuth error:", error)
+
+          const currentUser = get().user
+          if (currentUser?.id === "2") {
+            console.log("Preserving demo user session despite error.")
+            return
+          }
+
           set({ isAuthenticated: false, user: null })
         }
       },
     }),
     {
       name: "auth-store",
+      // ✅ Optional: Remove auto checkAuth on rehydrate if unnecessary
       onRehydrateStorage: () => (state) => {
-        state?.checkAuth?.()
+        // Optionally skip this if you want full control from ProtectedRoute
+        // state?.checkAuth?.()
       },
     }
   )
