@@ -214,11 +214,15 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
       console.log("Crawling failed:", data.status)
     // --- ✅ Handle Failure ---
     } else if (data.status === "failed") {
-      await djangoApiService.updateUserSession(jobId, {
-      status: "failed",
-      progress: data.progress || 0,
-      error: data.error || "Unknown error",
-      })
+      const { active_session } = await djangoApiService.getUserSessions(userId)
+      if (!active_session) {
+        // If there is no active session, just update the job status and show error
+        await djangoApiService.updateUserSession(jobId, {
+          status: "failed",
+          progress: data.progress || 0,
+          error: data.error || "Unknown error",
+        })
+      } 
     } else {
       pollingRef.current = setTimeout(() => pollJobStatus(jobId), 2000)
     }
