@@ -65,7 +65,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 
 SESSION_COOKIE_SAMESITE = "Lax"  # Or "None" if you use HTTPS
-SESSION_COOKIE_SECURE = False    #
+SESSION_COOKIE_SECURE = True    #
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
