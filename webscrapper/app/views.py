@@ -20,6 +20,10 @@ import json
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import permission_classes
 from .models import Product
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+from django.db.models import Q
+
 
 jobs = {}
 
@@ -332,12 +336,130 @@ def get_categories(request):
 #     return JsonResponse({"productData": latest_job["results"]["productData"]})
 
 
+# @require_http_methods(["GET"])
+# def get_products(request):
+#     products = Product.objects.select_related('category', 'crawl_job').all()
+    
+#     product_data = []
+#     for product in products:
+#         product_data.append({
+#             "name": product.name,
+#             "price": product.price,
+#             "product_url": product.product_url,
+#             "image_url": product.image_url,
+#             "details": product.details,
+#             "category_url": product.category.url if product.category else None,
+#             "crawl_job_id": product.crawl_job.job_id if product.crawl_job else None,
+#             "change_date": product.change_date.isoformat(),
+#         })
+
+#     return JsonResponse({"productData": product_data})
+
+
+# @require_http_methods(["GET"])
+# def get_products(request):
+#     page = request.GET.get('page', 1)
+#     per_page = request.GET.get('per_page', 20)
+
+#     try:
+#         per_page = int(per_page)
+#         page = int(page)
+#     except ValueError:
+#         return JsonResponse({'error': 'Invalid page or per_page parameter'}, status=400)
+
+#     products = Product.objects.select_related('category', 'crawl_job').all()
+#     paginator = Paginator(products, per_page)
+
+#     try:
+#         products_page = paginator.page(page)
+#     except PageNotAnInteger:
+#         products_page = paginator.page(1)
+#     except EmptyPage:
+#         return JsonResponse({"productData": [], "message": "No more products"}, status=200)
+
+#     product_data = []
+#     for product in products_page:
+#         product_data.append({
+#             "name": product.name,
+#             "price": product.price,
+#             "product_url": product.product_url,
+#             "image_url": product.image_url,
+#             "details": product.details,
+#             "category_url": product.category.url if product.category else None,
+#             "crawl_job_id": product.crawl_job.job_id if product.crawl_job else None,
+#             "change_date": product.change_date.isoformat(),
+#         })
+
+#     return JsonResponse({
+#         "productData": product_data,
+#         "total": paginator.count,
+#         "num_pages": paginator.num_pages,
+#         "current_page": products_page.number,
+#         "has_next": products_page.has_next(),
+#         "has_previous": products_page.has_previous(),
+#     })
+
+
+
+
+
 @require_http_methods(["GET"])
 def get_products(request):
+    page = request.GET.get('page', 1)
+    per_page = request.GET.get('per_page', 20)
+    search = request.GET.get('search', '')
+    min_rating = request.GET.get('min_rating', None)
+    sort_by = request.GET.get('sort_by', 'name')  # Default to sorting by name
+    sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
+
+    try:
+        per_page = int(per_page)
+        page = int(page)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid page or per_page parameter'}, status=400)
+
+    # Base queryset
     products = Product.objects.select_related('category', 'crawl_job').all()
-    
+
+    # Search across name, price, and details
+    if search:
+        products = products.filter(
+            Q(name__icontains=search) |
+            Q(price__icontains=search) |
+            Q(details__icontains=search)
+        )
+
+    # Filter by minimum rating
+    if min_rating and min_rating != 'all':
+        try:
+            min_rating_float = float(min_rating)
+            products = products.filter(details__Rating__gte=min_rating_float)
+        except (ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid min_rating parameter'}, status=400)
+
+    # Sorting
+    if sort_by in ['name', 'price', 'rating']:
+        if sort_by == 'rating':
+            sort_field = 'details__Rating'
+        else:
+            sort_field = sort_by
+        order = f'-{sort_field}' if sort_order == 'desc' else sort_field
+        products = products.order_by(order)
+    else:
+        return JsonResponse({'error': 'Invalid sort_by parameter'}, status=400)
+
+    # Pagination
+    paginator = Paginator(products, per_page)
+    try:
+        products_page = paginator.page(page)
+    except PageNotAnInteger:
+        products_page = paginator.page(1)
+    except EmptyPage:
+        return JsonResponse({"productData": [], "message": "No more products"}, status=200)
+
+    # Prepare response data
     product_data = []
-    for product in products:
+    for product in products_page:
         product_data.append({
             "name": product.name,
             "price": product.price,
@@ -349,27 +471,90 @@ def get_products(request):
             "change_date": product.change_date.isoformat(),
         })
 
-    return JsonResponse({"productData": product_data})
+    return JsonResponse({
+        "productData": product_data,
+        "total": paginator.count,
+        "num_pages": paginator.num_pages,
+        "current_page": products_page.number,
+        "has_next": products_page.has_next(),
+        "has_previous": products_page.has_previous(),
+    })
+
+
+# @require_http_methods(["GET"])
+# def get_product_changes(request):
+#     job_id = request.GET.get("jobId")
+#     if not job_id:
+#         return JsonResponse({"error": "Job ID is required"}, status=400)
+
+#     logs = ProductChangeLog.objects.filter(crawl_job__job_id=job_id)
+#     data = {
+#         "new": [],
+#         "updated": [],
+#         "removed": []
+#     }
+
+#     for log in logs:
+#         data[log.change_type].append(log.data)
+
+#     return JsonResponse(data)
 
 
 
 @require_http_methods(["GET"])
 def get_product_changes(request):
     job_id = request.GET.get("jobId")
+    page = request.GET.get("page", 1)
+    per_page = request.GET.get("per_page", 20)
+
     if not job_id:
         return JsonResponse({"error": "Job ID is required"}, status=400)
 
-    logs = ProductChangeLog.objects.filter(crawl_job__job_id=job_id)
+    try:
+        page = int(page)
+        per_page = int(per_page)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid page or per_page parameter'}, status=400)
+
+    logs = ProductChangeLog.objects.filter(crawl_job__job_id=job_id).order_by('id')
+
+    paginator = Paginator(logs, per_page)
+    try:
+        logs_page = paginator.page(page)
+    except PageNotAnInteger:
+        logs_page = paginator.page(1)
+    except EmptyPage:
+        return JsonResponse({
+            "new": [], "updated": [], "removed": [],
+            "pagination": {
+                "total": paginator.count,
+                "num_pages": paginator.num_pages,
+                "current_page": page,
+                "has_next": False,
+                "has_previous": True,
+            }
+        })
+
     data = {
         "new": [],
         "updated": [],
         "removed": []
     }
 
-    for log in logs:
-        data[log.change_type].append(log.data)
+    for log in logs_page:
+        if log.change_type in data:
+            data[log.change_type].append(log.data)
+
+    data["pagination"] = {
+        "total": paginator.count,
+        "num_pages": paginator.num_pages,
+        "current_page": logs_page.number,
+        "has_next": logs_page.has_next(),
+        "has_previous": logs_page.has_previous(),
+    }
 
     return JsonResponse(data)
+
 
 
 
