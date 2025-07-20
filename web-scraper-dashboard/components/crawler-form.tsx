@@ -19,7 +19,7 @@ import { useUIStore } from "@/lib/ui-store"
 
 
 interface CrawlStatus {
-  status: "pending" | "running" | "completed" | "failed"
+  status: "undefined" | "pending" | "running" | "completed" | "failed" 
   progress: number
   message?: string
   error?: string
@@ -176,27 +176,28 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
   const pollJobStatus = async (jobId: string) => {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/status?jobId=${jobId}`)
+    const { active_session } = await djangoApiService.getUserSessions(userId)
     console.log(response)
-    const data = await response.json()
+    const data = active_session
 
     console.log("Polling job status:", data)
 
     if (!response.ok) {
-      throw new Error(data.error || "Failed to get job status")
+      throw new Error(data?.error || "Failed to get job status")
     }
 
     const crawlStatus: CrawlStatus = {
-      status: data.status,
-      progress: data.progress,
-      message: data.message || getStatusMessage(data.status, data.progress),
-      error: data.error,
+      status: (data && data.status) ? data.status as CrawlStatus["status"] : "undefined",
+      progress: data && typeof data.progress === "number" ? data.progress : 0,
+      message: data && data.message ? data.message : getStatusMessage(data && data.status ? data.status : "undefined", data && typeof data.progress === "number" ? data.progress : 0),
+      error: data && data.error ? data.error : undefined,
     }
 
     // Update UI state
     setStatus(crawlStatus)
 
     // --- ✅ Handle Completion ---
-    if (data.status === "completed") {
+    if (data?.status === "completed") {
       await djangoApiService.updateUserSession(jobId, {
         status: "completed",
         progress: 100,
@@ -205,22 +206,22 @@ export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setU
 
       setIsLoading(false)
 
-      toast({
-        title: "Crawling completed",
-        description: `Found ${data.categoryLinks?.length || 0} category links and ${data.productData?.length || 0} products`,
-      })
+      // toast({
+      //   title: "Crawling completed",
+      //   description: `Found ${data.categoryLinks?.length || 0} category links and ${data.productData?.length || 0} products`,
+      // })
 
       onScrapeComplete?.(jobId)
       console.log("Crawling failed:", data.status)
     // --- ✅ Handle Failure ---
-    } else if (data.status === "failed") {
+    } else if (data?.status === "failed") {
       const { active_session } = await djangoApiService.getUserSessions(userId)
       if (!active_session) {
         // If there is no active session, just update the job status and show error
         await djangoApiService.updateUserSession(jobId, {
           status: "failed",
-          progress: data.progress || 0,
-          error: data.error || "Unknown error",
+          progress: data?.progress || 0,
+          error: data?.error || "Unknown error",
         })
       } 
     } else {
