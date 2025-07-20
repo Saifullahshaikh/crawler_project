@@ -6,17 +6,23 @@ from django.utils.timezone import localtime
 
 
 def run_scheduled_jobs_if_frontend_offline():
-    now = localtime()  
+    now = localtime()
     current_hour = now.hour
     current_minute = now.minute
     day = now.strftime('%A')
+
+    print(f"[INFO] Local time: {now} (Hour: {current_hour}, Minute: {current_minute}, Day: {day})")
+
+    # ⛔️ Global check: If any session is running/pending, skip execution of all jobs
+    if UserSession.objects.filter(status__in=['running', 'pending']).exists():
+        print("[BLOCKED] Another job is already running or pending. Skipping all scheduled jobs.")
+        return
 
     scheduled_jobs = ScheduledJob.objects.filter(
         scheduled_hour=current_hour,
         scheduled_minute=current_minute
     )
 
-    print(f"[INFO] Local time: {now} (Hour: {current_hour}, Minute: {current_minute}, Day: {day})")
     print(f"[INFO] Found {scheduled_jobs.count()} scheduled job(s).")
 
     for job in scheduled_jobs:
@@ -24,15 +30,6 @@ def run_scheduled_jobs_if_frontend_offline():
             continue
 
         if job.last_run and (now - job.last_run).seconds < 60:
-            continue
-
-        has_active_session = UserSession.objects.filter(
-            job_id=str(job.id),
-            status__in=['running', 'pending']
-        ).exists()
-
-        if has_active_session:
-            print(f"[SKIP] Active session exists for job {job.id}")
             continue
 
         try:
@@ -55,7 +52,6 @@ def run_scheduled_jobs_if_frontend_offline():
                 progress=0,
                 urls=job.urls
             )
-
 
             job.last_run = now
             job.save()
