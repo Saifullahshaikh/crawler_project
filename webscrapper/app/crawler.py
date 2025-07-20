@@ -217,10 +217,8 @@ def crawl_links_recursively(base_url, output_file, job_id=None):
             scraped_data = scraper.scrape_url(paginated_url)
 
             if scraped_data and "products" in scraped_data and scraped_data["products"]:
-                save_url_to_json(output_file, paginated_url)
                 print(f"✅ Scraped {len(scraped_data['products'])} products from {paginated_url}")
                 save_single_url_data_to_db(job_id, scraped_data)
-                all_products_data.append(scraped_data)
 
                 # Add to recursive list
                 to_visit.append(paginated_url)
