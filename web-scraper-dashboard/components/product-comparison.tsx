@@ -101,6 +101,8 @@ export function ProductComparison({
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [jobId, setJobId] = useState<string>("")
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
   const [currentJobId, setCurrentJobId] = useState<string>("")
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const [currentPage, setCurrentPage] = useState(1)
@@ -108,14 +110,22 @@ export function ProductComparison({
   const { toast } = useToast()
   const { activeUserSession } = useSessionStore()
 
-  const fetchComparisonData = async (specificJobId?: string, page: number = 1) => {
+  const fetchComparisonData = async (specificJobId?: string, page: number = 1, start?: string, end?: string) => {
     setIsLoading(true)
 
     try {
       const url = new URL(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/product-changes/`)
-      url.searchParams.append('jobId', specificJobId || activeUserSession?.job_id || '')
+      if (specificJobId || activeUserSession?.job_id) {
+        url.searchParams.append('jobId', specificJobId || activeUserSession?.job_id || '')
+      }
       url.searchParams.append('page', page.toString())
       url.searchParams.append('per_page', perPage.toString())
+      if (start) {
+        url.searchParams.append('start_date', start)
+      }
+      if (end) {
+        url.searchParams.append('end_date', end)
+      }
 
       const response = await fetch(url.toString())
       const data = await response.json()
@@ -141,7 +151,7 @@ export function ProductComparison({
   useEffect(() => {
     if (completedJobId) {
       setJobId(completedJobId)
-      fetchComparisonData(completedJobId, 1)
+      fetchComparisonData(completedJobId, 1, startDate, endDate)
       toast({
         title: "Comparison Updated",
         description: `Showing changes for completed job: ${completedJobId}`,
@@ -151,27 +161,29 @@ export function ProductComparison({
 
   useEffect(() => {
     if (!completedJobId) {
-      fetchComparisonData(undefined, 1)
+      fetchComparisonData(undefined, 1, startDate, endDate)
     }
   }, [refreshTrigger])
 
   const handleJobIdSearch = () => {
-    if (jobId.trim()) {
-      fetchComparisonData(jobId.trim(), 1)
+    if (jobId.trim() || startDate || endDate) {
+      fetchComparisonData(jobId.trim(), 1, startDate, endDate)
     } else {
-      fetchComparisonData(undefined, 1)
+      fetchComparisonData(undefined, 1, startDate, endDate)
     }
   }
 
-  const clearJobId = () => {
+  const clearFilters = () => {
     setJobId("")
+    setStartDate("")
+    setEndDate("")
     setCurrentJobId("")
     setCurrentPage(1)
     fetchComparisonData(undefined, 1)
   }
 
   const handlePageChange = (newPage: number) => {
-    fetchComparisonData(currentJobId || undefined, newPage)
+    fetchComparisonData(currentJobId || undefined, newPage, startDate, endDate)
   }
 
   const toggleExpanded = (key: string) => {
@@ -238,7 +250,7 @@ export function ProductComparison({
     return (
       <div className="space-y-3">
         {Object.entries(changes).map(([field, change]: [string, any]) => (
-          <div key={field} className="border rounded-lg p-3">
+          <div key={field} className="border rounded-lg pss-3">
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="outline" className="text-xs">
                 {field.replace(/_/g, " ").toUpperCase()}
@@ -336,7 +348,7 @@ export function ProductComparison({
         {details["Product Specification"] && details["Product Specification"].length > 0 && (
           <div>
             <span className="text-xs font-medium text-muted-foreground">Specifications:</span>
-            <ul className=" bifurcate list-disc pl-5 text-xs mt-1 space-y-1">
+            <ul className="list-disc pl-5 text-xs mt-1 space-y-1">
               {details["Product Specification"].slice(0, 5).map((spec, i) => (
                 <li key={i}>{spec}</li>
               ))}
@@ -659,6 +671,12 @@ export function ProductComparison({
         if (currentJobId) {
           textLines.push(`Job ID: ${currentJobId}`)
         }
+        if (startDate) {
+          textLines.push(`Start Date: ${startDate}`)
+        }
+        if (endDate) {
+          textLines.push(`End Date: ${endDate}`)
+        }
         if (comparisonData.job_info) {
           textLines.push(`Crawled URLs: ${comparisonData.job_info.urls.join(", ")}`)
           textLines.push(`Total Products: ${comparisonData.job_info.total_products}`)
@@ -738,7 +756,7 @@ export function ProductComparison({
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `detailed-product-comparison-${currentJobId || "latest"}.${fileExtension}`
+    a.download = `product-comparison-${currentJobId || "latest"}-${startDate || "no-start"}-${endDate || "no-end"}.${fileExtension}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -746,7 +764,7 @@ export function ProductComparison({
 
     toast({
       title: "Download started",
-      description: `Downloading detailed comparison data as ${format.toUpperCase()}`,
+      description: `Downloading comparison data as ${format.toUpperCase()}`,
     })
   }
 
@@ -813,6 +831,14 @@ export function ProductComparison({
                     <span className="text-xs font-mono bg-muted px-2 py-1 rounded">Job: {currentJobId}</span>
                   </>
                 )}
+                {(startDate || endDate) && (
+                  <>
+                    <br />
+                    <span className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                      {startDate ? `From: ${startDate}` : ""} {endDate ? `To: ${endDate}` : ""}
+                    </span>
+                  </>
+                )}
                 {comparisonData.job_info && (
                   <>
                     <br />
@@ -829,9 +855,9 @@ export function ProductComparison({
           </CardDescription>
         </div>
         <div className="flex gap-2">
-          {currentJobId && (
-            <Button variant="outline" size="sm" onClick={clearJobId} className="gap-1">
-              Clear Job
+          {(currentJobId || startDate || endDate) && (
+            <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+              Clear Filters
             </Button>
           )}
           <div className="relative inline-block">
@@ -839,7 +865,7 @@ export function ProductComparison({
               variant="outline"
               size="icon"
               onClick={() => {
-                fetchComparisonData(currentJobId || undefined, currentPage)
+                fetchComparisonData(currentJobId || undefined, currentPage, startDate, endDate)
                 setShowTooltip(false)
               }}
               disabled={isLoading}
@@ -860,25 +886,51 @@ export function ProductComparison({
       </CardHeader>
       <CardContent>
         {!completedJobId && (
-          <div className="flex gap-2 mb-4">
-            <div className="flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
               <Label htmlFor="jobId" className="text-sm font-medium">
                 Job ID (optional)
               </Label>
               <Input
                 id="jobId"
-                placeholder="Enter job ID to get specific comparison..."
+                placeholder="Enter job ID..."
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
                 className="mt-1"
               />
             </div>
-            <div className="flex items-end">
-              <Button onClick={handleJobIdSearch} disabled={isLoading} className="gap-2">
-                <Search className="h-4 w-4" />
-                Search
-              </Button>
+            <div>
+              <Label htmlFor="startDate" className="text-sm font-medium">
+                Start Date (YYYY-MM-DD)
+              </Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="mt-1"
+              />
             </div>
+            <div>
+              <Label htmlFor="endDate" className="text-sm font-medium">
+                End Date (YYYY-MM-DD)
+              </Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        )}
+        {!completedJobId && (
+          <div className="flex justify-end mb-4">
+            <Button onClick={handleJobIdSearch} disabled={isLoading} className="gap-2">
+              <Search className="h-4 w-4" />
+              Apply Filters
+            </Button>
           </div>
         )}
 

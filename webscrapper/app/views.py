@@ -23,6 +23,7 @@ from .models import Product
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from django.db.models import Q
+from django.utils.dateparse import parse_date
 
 
 jobs = {}
@@ -489,14 +490,69 @@ def get_products(request):
 
 
 
+# @require_http_methods(["GET"])
+# def get_product_changes(request):
+#     job_id = request.GET.get("jobId")
+#     page = request.GET.get("page", 1)
+#     per_page = request.GET.get("per_page", 20)
+
+#     if not job_id:
+#         return JsonResponse({"error": "Job ID is required"}, status=400)
+
+#     try:
+#         page = int(page)
+#         per_page = int(per_page)
+#     except ValueError:
+#         return JsonResponse({'error': 'Invalid page or per_page parameter'}, status=400)
+
+#     logs = ProductChangeLog.objects.filter(crawl_job__job_id=job_id).order_by('id')
+
+#     paginator = Paginator(logs, per_page)
+#     try:
+#         logs_page = paginator.page(page)
+#     except PageNotAnInteger:
+#         logs_page = paginator.page(1)
+#     except EmptyPage:
+#         return JsonResponse({
+#             "new": [], "updated": [], "removed": [],
+#             "pagination": {
+#                 "total": paginator.count,
+#                 "num_pages": paginator.num_pages,
+#                 "current_page": page,
+#                 "has_next": False,
+#                 "has_previous": True,
+#             }
+#         })
+
+#     data = {
+#         "new": [],
+#         "updated": [],
+#         "removed": []
+#     }
+
+#     for log in logs_page:
+#         if log.change_type in data:
+#             data[log.change_type].append(log.data)
+
+#     data["pagination"] = {
+#         "total": paginator.count,
+#         "num_pages": paginator.num_pages,
+#         "current_page": logs_page.number,
+#         "has_next": logs_page.has_next(),
+#         "has_previous": logs_page.has_previous(),
+#     }
+
+#     return JsonResponse(data)
+
+
+
 @require_http_methods(["GET"])
 def get_product_changes(request):
     job_id = request.GET.get("jobId")
     page = request.GET.get("page", 1)
     per_page = request.GET.get("per_page", 20)
-
-    if not job_id:
-        return JsonResponse({"error": "Job ID is required"}, status=400)
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
 
     try:
         page = int(page)
@@ -504,9 +560,30 @@ def get_product_changes(request):
     except ValueError:
         return JsonResponse({'error': 'Invalid page or per_page parameter'}, status=400)
 
-    logs = ProductChangeLog.objects.filter(crawl_job__job_id=job_id).order_by('id')
+    logs = ProductChangeLog.objects.all()
 
+    # Filter by job ID if provided
+    if job_id:
+        logs = logs.filter(crawl_job__job_id=job_id)
+
+    # Filter based on the crawl job's started_at field
+    if start_date:
+        parsed_start = parse_date(start_date)
+        if parsed_start:
+            logs = logs.filter(crawl_job__started_at__date__gte=parsed_start)
+        else:
+            return JsonResponse({"error": "Invalid start_date format. Use YYYY-MM-DD."}, status=400)
+
+    if end_date:
+        parsed_end = parse_date(end_date)
+        if parsed_end:
+            logs = logs.filter(crawl_job__started_at__date__lte=parsed_end)
+        else:
+            return JsonResponse({"error": "Invalid end_date format. Use YYYY-MM-DD."}, status=400)
+
+    logs = logs.order_by('id')
     paginator = Paginator(logs, per_page)
+
     try:
         logs_page = paginator.page(page)
     except PageNotAnInteger:
@@ -519,7 +596,7 @@ def get_product_changes(request):
                 "num_pages": paginator.num_pages,
                 "current_page": page,
                 "has_next": False,
-                "has_previous": True,
+                "has_previous": paginator.num_pages > 1,
             }
         })
 
@@ -542,7 +619,6 @@ def get_product_changes(request):
     }
 
     return JsonResponse(data)
-
 
 
 
