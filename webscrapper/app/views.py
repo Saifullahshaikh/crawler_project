@@ -18,7 +18,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from .models import ProductChangeLog
 import json
 from rest_framework.permissions import AllowAny
-from rest_framework.decorators import permission_classes, authentication_classes
+from rest_framework.decorators import permission_classes
 from .models import Product
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
@@ -798,7 +798,6 @@ def user_sessions_view(request):
 
 @csrf_exempt
 @api_view(['PATCH', 'DELETE'])
-@authentication_classes([])  # No auth
 @permission_classes([AllowAny])
 def user_session_detail_view(request, job_id):
     try:
