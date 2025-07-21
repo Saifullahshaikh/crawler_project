@@ -28,7 +28,7 @@ export function LoginForm() {
 
     const success = await login(username, password)
     if (!success) {
-      setError("Invalid credentials. Try admin/password123 for demo.")
+      setError("Invalid credentials. Please try again.")
     }
   }
 
@@ -89,15 +89,6 @@ export function LoginForm() {
             </Button>
           </form>
 
-          <div className="mt-4 p-3 bg-blue-50 rounded-md">
-            <p className="text-sm text-blue-700">
-              <strong>Demo Credentials:</strong>
-              <br />
-              Username: admin
-              <br />
-              Password: password123
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
