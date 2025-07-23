@@ -48,7 +48,7 @@ export function LoginForm() {
               <Input
                 id="username"
                 type="text"
-                placeholder="admin"
+                placeholder="Enter Username or Email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isLoading}
@@ -60,7 +60,7 @@ export function LoginForm() {
               <Input
                 id="password"
                 type="password"
-                placeholder="password123"
+                placeholder="Enter Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
