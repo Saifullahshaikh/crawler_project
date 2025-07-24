@@ -97,7 +97,7 @@ class DjangoApiService {
           }
 
           // Make API call to logout
-          const response = await this.apiCall("https://x7dpqr-be.duckdns.org/api/auth/logout/", {
+          const response = await this.apiCall("/auth/logout/", {
               method: "POST",
               credentials: "include", // Send cookies (sessionid, csrftoken)
               headers: {
