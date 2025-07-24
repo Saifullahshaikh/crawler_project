@@ -67,7 +67,7 @@ class DjangoApiService {
 
   async logout() {
       try {
-          // Retrieve CSRF token from cookies or meta tag
+          // Retrieve CSRF token from cookies
           const getCookie = (name: string) => {
               const value = `; ${document.cookie}`;
               const parts = value.split(`; ${name}=`);
@@ -81,13 +81,18 @@ class DjangoApiService {
           };
           const csrfToken = getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content;
 
-          // Make API call to logout with CSRF token
-          const response = await this.apiCall("/auth/logout/", {
+          if (!csrfToken) {
+              console.warn("CSRF token not found. Ensure the server sets 'csrftoken' cookie.");
+          }
+
+          // Make API call to logout
+          const response = await this.apiCall("https://x7dpqr-be.duckdns.org/api/auth/logout/", {
               method: "POST",
-              credentials: "include", // Include cookies in the request
+              credentials: "include", // Send cookies (e.g., sessionid, csrftoken)
               headers: {
-                  'X-CSRFToken': csrfToken || '', // Include CSRF token in headers
-                  'Content-Type': 'application/json'
+                  'X-CSRFToken': csrfToken || '', // Include CSRF token
+                  'Content-Type': 'application/json',
+                  'Origin': 'https://a9mfzj-fe.duckdns.org' // Explicitly set Origin
               }
           });
 
@@ -102,15 +107,20 @@ class DjangoApiService {
               const name = cookie.split("=")[0].trim();
               document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
               document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+              // Also clear cookies for backend domain
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=x7dpqr-be.duckdns.org`;
           });
 
+          // Navigate to login page to render <LoginForm />
           // Redirect to login page
-          window.location.replace("/");
+        window.location.replace("/login");
 
           return response;
       } catch (error) {
           console.error("Logout failed:", error);
-          // Optionally notify user of failure
+          // Redirect to login even on error to ensure UI consistency
+          // Redirect to login page
+        window.location.replace("/login");
           throw error;
       }
   }
