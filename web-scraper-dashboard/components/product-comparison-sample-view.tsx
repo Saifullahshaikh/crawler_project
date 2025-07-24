@@ -186,7 +186,7 @@ export function ProductComparisonSampleView() {
                         <Calendar className="h-3 w-3" />
                         <span>{new Date(product.change_date).toLocaleString()}</span>
                       </div>
-                      <a
+                      {/* <a
                         href={product.product_url}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -194,7 +194,7 @@ export function ProductComparisonSampleView() {
                       >
                         <ExternalLink className="h-3 w-3" />
                         View Product
-                      </a>
+                      </a> */}
                     </CardContent>
                   </Card>
                 ))}

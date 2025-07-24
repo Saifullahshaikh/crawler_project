@@ -64,10 +64,55 @@ class DjangoApiService {
     })
   }
 
+
   async logout() {
-    return this.apiCall("/auth/logout/", {
-      method: "POST",
-    })
+      try {
+          // Retrieve CSRF token from cookies or meta tag
+          const getCookie = (name: string) => {
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) {
+                  const part = parts.pop();
+                  if (part !== undefined) {
+                      return part.split(';').shift();
+                  }
+              }
+              return null;
+          };
+          const csrfToken = getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content;
+
+          // Make API call to logout with CSRF token
+          const response = await this.apiCall("/auth/logout/", {
+              method: "POST",
+              credentials: "include", // Include cookies in the request
+              headers: {
+                  'X-CSRFToken': csrfToken || '', // Include CSRF token in headers
+                  'Content-Type': 'application/json'
+              }
+          });
+
+          // Clear session storage
+          sessionStorage.clear();
+
+          // Clear local storage
+          localStorage.clear();
+
+          // Clear all cookies
+          document.cookie.split(";").forEach(cookie => {
+              const name = cookie.split("=")[0].trim();
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+          });
+
+          // Redirect to login page
+          window.location.replace("/");
+
+          return response;
+      } catch (error) {
+          console.error("Logout failed:", error);
+          // Optionally notify user of failure
+          throw error;
+      }
   }
 
   async getProfile() {

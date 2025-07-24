@@ -1524,7 +1524,7 @@ export function ProductData() {
                             </div>
                             {renderPriceInfo(product)}
                             <div className="mt-3">
-                              <a
+                              {/* <a
                                 href={product.product_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1532,7 +1532,7 @@ export function ProductData() {
                               >
                                 <ExternalLink className="h-3 w-3" />
                                 View Product
-                              </a>
+                              </a> */}
                             </div>
                           </CardContent>
                         </Card>
@@ -1620,7 +1620,7 @@ export function ProductData() {
                             <div className="mt-1">{renderRating(product.details.Rating || "0")}</div>
                             {renderPriceInfo(product)}
                             <div className="mt-3">
-                              <a
+                              {/* <a
                                 href={product.product_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1628,7 +1628,7 @@ export function ProductData() {
                               >
                                 <ExternalLink className="h-3 w-3" />
                                 View Product
-                              </a>
+                              </a> */}
                             </div>
                           </div>
                         </div>
@@ -1816,7 +1816,7 @@ export function ProductData() {
                                       </div>
                                     )}
                                   <div className="pt-2">
-                                    <a
+                                    {/* <a
                                       href={product.product_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
@@ -1824,7 +1824,7 @@ export function ProductData() {
                                     >
                                       <ExternalLink className="h-4 w-4" />
                                       View Product
-                                    </a>
+                                    </a> */}
                                   </div>
                                 </div>
                               </div>

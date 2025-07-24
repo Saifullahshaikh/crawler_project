@@ -504,7 +504,7 @@ export function ProductComparison({
             )}
 
             <div className="flex items-center justify-between">
-              <a
+              {/* <a
                 href={product.product_url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -512,7 +512,7 @@ export function ProductComparison({
               >
                 <ExternalLink className="h-3 w-3" />
                 View Product
-              </a>
+              </a> */}
 
               <Button variant="ghost" size="sm" onClick={() => toggleExpanded(cardKey)} className="h-6 px-2 text-xs">
                 <Eye className="h-3 w-3 mr-1" />
