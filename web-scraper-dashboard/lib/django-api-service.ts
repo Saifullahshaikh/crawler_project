@@ -66,8 +66,6 @@ class DjangoApiService {
 
 
   async logout() {
-
-
       try {
           // Retrieve CSRF token from cookies or meta tag
           const getCookie = (name: string) => {
@@ -76,37 +74,21 @@ class DjangoApiService {
               if (parts.length === 2) {
                   const part = parts.pop();
                   if (part !== undefined) {
-                      return part.split(';').shift() || null;
+                      return part.split(';').shift();
                   }
               }
               return null;
           };
           const csrfToken = getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content;
-          const sessionId = getCookie('sessionid');
 
-          // Log debugging information
-          console.log('CSRF Token:', csrfToken);
-          console.log('Session ID:', sessionId);
-          console.log('Cookies:', document.cookie);
-
-          if (!csrfToken) {
-              console.error("CSRF token not found. Ensure the server sets 'csrftoken' cookie.");
-          }
-          if (!sessionId) {
-              console.error("Session ID not found. User may not be authenticated.");
-          }
-
-          // Make API call to logout
+          // Make API call to logout with CSRF token
           const response = await this.apiCall("/auth/logout/", {
               method: "POST",
-              credentials: "include", // Send cookies (sessionid, csrftoken)
+              credentials: "include", // Include cookies in the request
               headers: {
-                  'X-CSRFToken': csrfToken || '', // Include CSRF token
-                  'Content-Type': 'application/json',
-                  'Origin': 'https://a9mfzj-fe.duckdns.org', // Match frontend origin
-                  'Accept': 'application/json'
-              },
-              body: JSON.stringify({}) // Empty body for POST
+                  'X-CSRFToken': csrfToken || '', // Include CSRF token in headers
+                  'Content-Type': 'application/json'
+              }
           });
 
           // Clear session storage
@@ -115,34 +97,23 @@ class DjangoApiService {
           // Clear local storage
           localStorage.clear();
 
-          // Clear all cookies for both domains
+          // Clear all cookies
           document.cookie.split(";").forEach(cookie => {
               const name = cookie.split("=")[0].trim();
               document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
               document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=x7dpqr-be.duckdns.org`;
           });
 
-          // Navigate to login page to render <LoginForm />
+          // Redirect to login page
           window.location.replace("/");
-
 
           return response;
       } catch (error) {
           console.error("Logout failed:", error);
-          // Log response details if available
-          if (typeof error === "object" && error !== null && "response" in error) {
-              const errResp = (error as any).response;
-              console.error("Response status:", errResp?.status);
-              console.error("Response data:", errResp?.data);
-          }
-          // Redirect to login even on error
-          window.location.replace("/");
-
+          // Optionally notify user of failure
           throw error;
       }
   }
-
 
   async getProfile() {
     return this.apiCall("/auth/profile/")
