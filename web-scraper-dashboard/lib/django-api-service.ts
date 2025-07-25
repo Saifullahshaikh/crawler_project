@@ -67,6 +67,11 @@ class DjangoApiService {
 
   async logout() {
       try {
+          // Clear session storage
+          sessionStorage.clear();
+
+          // Clear local storage
+          localStorage.clear();
           // Retrieve CSRF token from cookies or meta tag
           const getCookie = (name: string) => {
               const value = `; ${document.cookie}`;
