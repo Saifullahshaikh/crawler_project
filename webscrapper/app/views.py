@@ -683,6 +683,8 @@ def login_view(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@authentication_classes([])  # disables SessionAuth
+@permission_classes([AllowAny])
 def logout_view(request):
     logout(request)
     return Response({'success': True})
