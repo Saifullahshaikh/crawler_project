@@ -585,11 +585,12 @@ def log_memory_usage():
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
     logging.info(f"Memory usage: {mem_info.rss / 1024 / 1024:.2f} MB")
+    return mem_info.rss / 1024 / 1024  # Return memory in MB
 
 def slugify(text):
     return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
 
-@lru_cache(maxsize=1000)
+@lru_cache(maxsize=500)
 def get_word_sequences(words, min_len=2):
     sequences = []
     words = words.split()
@@ -617,45 +618,46 @@ def has_matching_sequence(heading_slug, url_slug):
 def is_product_detail_page(url, session):
     logging.info(f"Checking if URL is a product detail page: {url}")
     try:
-        response = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-
-        for heading in soup.find_all(['h1', 'h2']):
-            classes = heading.get('class') or []
-            if any(cls in ['product_title', 'product-title', 'fusion-title-heading'] for cls in classes):
-                heading_text = heading.get_text(strip=True)
-                if heading_text:
-                    heading_slug = slugify(heading_text)
-                    url_slug = slugify(urlparse(url).path.strip('/'))
-                    if has_matching_sequence(heading_slug, url_slug):
-                        logging.info("Product detail page detected.")
-                        return True
-        logging.info("Not a product detail page.")
-        return False
+        with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, stream=True) as response:
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for heading in soup.find_all(['h1', 'h2']):
+                classes = heading.get('class') or []
+                if any(cls in ['product_title', 'product-title', 'fusion-title-heading'] for cls in classes):
+                    heading_text = heading.get_text(strip=True)
+                    if heading_text:
+                        heading_slug = slugify(heading_text)
+                        url_slug = slugify(urlparse(url).path.strip('/'))
+                        if has_matching_sequence(heading_slug, url_slug):
+                            logging.info("Product detail page detected.")
+                            return True
+            logging.info("Not a product detail page.")
+            return False
     except Exception as e:
         logging.error(f"Error checking product detail page {url}: {e}")
         return False
     finally:
-        gc.collect()  # Force garbage collection
+        soup = None  # Explicitly clear reference
+        gc.collect()
 
-@lru_cache(maxsize=1000)
+@lru_cache(maxsize=500)
 def extract_dynamic_hrefs(url, session):
     try:
-        response = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        all_hrefs = [a.get('href') for a in soup.find_all('a') if a.get('href')]
-        filtered_hrefs = [
-            href for href in all_hrefs
-            if href.startswith(("http", "https", "/"))
-        ]
-        return filtered_hrefs
+        with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, stream=True) as response:
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            all_hrefs = [a.get('href') for a in soup.find_all('a') if a.get('href')]
+            filtered_hrefs = [
+                href for href in all_hrefs
+                if href.startswith(("http", "https", "/"))
+            ]
+            return filtered_hrefs
     except Exception as e:
         logging.error(f"Error extracting hrefs from {url}: {e}")
         return []
     finally:
-        gc.collect()  # Force garbage collection
+        soup = None  # Explicitly clear reference
+        gc.collect()
 
 def save_url_to_json(output_file, current_url):
     try:
@@ -673,16 +675,14 @@ def save_url_to_json(output_file, current_url):
     except Exception as e:
         logging.error(f"Error saving URL to JSON {output_file}: {e}")
 
-def crawl_links_recursively(base_url, job_id=None, max_workers=5):
+def crawl_links_recursively(base_url, job_id=None, max_workers=3):
     visited = set()
     to_visit = [base_url]
     domain = urlparse(base_url).netloc
-    all_products_data = []
-    scraper = ProductDataScraper()
-    paginated_urls = set()  # Track paginated URLs separately
-    failed_urls = set()  # Track URLs that fail consistently
+    paginated_urls = set()
+    failed_urls = set()
+    max_memory_mb = 1000  # Memory threshold (1 GB)
 
-    # Single session for all requests
     with requests.Session() as session:
         session.proxies.update(proxies)
         session.headers.update({"User-Agent": "Mozilla/5.0"})
@@ -716,11 +716,11 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=5):
                 return []
 
             try:
+                scraper = ProductDataScraper()
                 scraped_data = scraper.scrape_url(current_url)
                 if scraped_data and "products" in scraped_data and scraped_data["products"]:
                     logging.info(f"Scraped {len(scraped_data['products'])} products from {current_url}")
                     save_single_url_data_to_db(job_id, scraped_data)
-                    all_products_data.append(scraped_data)
                 hrefs = extract_dynamic_hrefs(current_url, session)
                 return [
                     urljoin(current_url, href) for href in hrefs
@@ -735,8 +735,13 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=5):
                 logging.error(f"Error processing {current_url}: {e}")
                 return []
             finally:
+                scraper = None
                 gc.collect()
-                log_memory_usage()
+                mem_usage = log_memory_usage()
+                if mem_usage > max_memory_mb:
+                    logging.warning(f"Memory usage ({mem_usage:.2f} MB) exceeds threshold. Clearing caches.")
+                    get_word_sequences.cache_clear()
+                    extract_dynamic_hrefs.cache_clear()
 
         # Crawl paginated /shop/page/{n}
         logging.info("Starting paginated /shop/page crawl...")
@@ -751,49 +756,54 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=5):
             logging.info(f"Crawling paginated shop page: {paginated_url}")
             paginated_urls.add(paginated_url)
             
-            for attempt in range(max_retries):
-                try:
-                    response = session.get(paginated_url, timeout=10)
+            try:
+                with session.get(paginated_url, timeout=10, stream=True) as response:
                     if response.status_code in [404, 403, 410]:
                         logging.info(f"Page {paginated_url} returned status {response.status_code}. Ending pagination.")
                         break
                     response.raise_for_status()
                     
-                    # Scrape products
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    scraper = ProductDataScraper()
                     scraped_data = scraper.scrape_url(paginated_url)
                     if scraped_data and "products" in scraped_data and scraped_data["products"]:
                         logging.info(f"Scraped {len(scraped_data['products'])} products from {paginated_url}")
                         save_single_url_data_to_db(job_id, scraped_data)
                         to_visit.append(paginated_url)
                     
-                    # Check for "next" link for logging
-                    soup = BeautifulSoup(response.content, 'html.parser')
                     next_link = soup.find('a', class_=['next', 'page-numbers next', 'pagination-next'])
                     has_next_page = bool(next_link and next_link.get('href'))
                     logging.info(f"Next page link {'found' if has_next_page else 'not found'} for {paginated_url}")
                     
                     page += 1
-                    break
-                except requests.exceptions.RequestException as e:
-                    logging.warning(f"Attempt {attempt + 1} failed for {paginated_url}: {e}")
-                    if attempt + 1 == max_retries:
-                        logging.error(f"Max retries reached for {paginated_url}. Marking as failed.")
-                        failed_urls.add(paginated_url)
-                        break
-                    time.sleep(2 ** attempt)
-            else:
-                page += 1
-                continue
-            if response.status_code in [404, 403, 410]:
-                break
-            time.sleep(0.2)
-            gc.collect()
-            log_memory_usage()
-            # Clear lru_cache periodically
-            if page % 50 == 0:
-                get_word_sequences.cache_clear()
-                extract_dynamic_hrefs.cache_clear()
-                logging.info("Cleared lru_cache to free memory")
+            except requests.exceptions.RequestException as e:
+                logging.warning(f"Attempt {attempt + 1} failed for {paginated_url}: {e}")
+                if attempt + 1 == max_retries:
+                    logging.error(f"Max retries reached for {paginated_url}. Marking as failed.")
+                    failed_urls.add(paginated_url)
+                    page += 1
+                    continue
+                time.sleep(2 ** attempt)
+            finally:
+                soup = None
+                scraper = None
+                gc.collect()
+                mem_usage = log_memory_usage()
+                if mem_usage > max_memory_mb:
+                    logging.warning(f"Memory usage ({mem_usage:.2f} MB) exceeds threshold. Clearing caches.")
+                    get_word_sequences.cache_clear()
+                    extract_dynamic_hrefs.cache_clear()
+                if page % 10 == 0:
+                    get_word_sequences.cache_clear()
+                    extract_dynamic_hrefs.cache_clear()
+                    logging.info("Cleared lru_cache to free memory")
+                    # Prune visited set to keep only recent URLs
+                    if len(visited) > 10000:
+                        visited.clear()
+                        visited.update(to_visit)
+                        visited.update(paginated_urls)
+                        visited.update(failed_urls)
+                        logging.info("Pruned visited set to reduce memory")
 
         # Parallel recursive crawling
         logging.info("Starting recursive link crawling...")
@@ -807,7 +817,10 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=5):
                     to_visit.extend(new_urls)
                 time.sleep(0.2)
                 gc.collect()
-                log_memory_usage()
+                mem_usage = log_memory_usage()
+                if mem_usage > max_memory_mb:
+                    logging.warning(f"Memory usage ({mem_usage:.2f} MB) exceeds threshold. Clearing caches.")
+                    get_word_sequences.cache_clear()
+                    extract_dynamic_hrefs.cache_clear()
 
-    logging.info(f"Total URLs crawled: {len(visited)}")
-    return []
+    return []  # Return empty list to avoid holding all_products_data

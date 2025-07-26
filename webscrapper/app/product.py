@@ -241,6 +241,7 @@ import logging
 from dotenv import load_dotenv
 import os
 import time
+import gc
 
 # Load environment variables
 load_dotenv()
@@ -263,31 +264,28 @@ proxies = {
 }
 
 class ProductScraper:
-    def __init__(self, url):
+    def __init__(self, url, session):
         self.url = url
-        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        self.session = session
         self.soup = None
-        self.session = requests.Session()
-        self.session.headers.update(self.headers)
-        self.session.proxies.update(proxies)
 
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=500)
     def fetch_page(self):
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                response = self.session.get(self.url, timeout=10)
-                if response.status_code == 403:
-                    raise Exception("403 Forbidden: Access Denied")
-                response.raise_for_status()
-                self.soup = BeautifulSoup(response.text, 'html.parser')
-                return
+                with self.session.get(self.url, timeout=10, stream=True) as response:
+                    if response.status_code == 403:
+                        raise Exception("403 Forbidden: Access Denied")
+                    response.raise_for_status()
+                    self.soup = BeautifulSoup(response.text, 'html.parser')
+                    return
             except Exception as e:
                 logging.warning(f"Attempt {attempt + 1} failed for {self.url}: {e}")
                 if attempt + 1 == max_retries:
                     logging.error(f"Max retries reached for {self.url}. Skipping.")
                     raise
-                time.sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2 ** attempt)
         raise Exception(f"Failed to fetch {self.url} after {max_retries} attempts")
 
     def get_image_url(self):
@@ -398,16 +396,21 @@ class ProductScraper:
         return previous_price, new_price, price_range
 
     def scrape(self):
-        self.fetch_page()
-        return {
-            "Image URL": self.get_image_url(),
-            "Thumbnail Images": self.get_thumbnail_images(),
-            "Title": self.get_title(),
-            "Rating": self.get_rating_and_reviews()[0],
-            "Customer Reviews": self.get_rating_and_reviews()[1],
-            "Size Options": self.get_size_options(),
-            "Product Specification": self.get_product_specification(),
-            "Previous Price": self.get_prices()[0],
-            "New Price": self.get_prices()[1],
-            "Price Range": self.get_prices()[2]
-        }
+        try:
+            self.fetch_page()
+            data = {
+                "Image URL": self.get_image_url(),
+                "Thumbnail Images": self.get_thumbnail_images(),
+                "Title": self.get_title(),
+                "Rating": self.get_rating_and_reviews()[0],
+                "Customer Reviews": self.get_rating_and_reviews()[1],
+                "Size Options": self.get_size_options(),
+                "Product Specification": self.get_product_specification(),
+                "Previous Price": self.get_prices()[0],
+                "New Price": self.get_prices()[1],
+                "Price Range": self.get_prices()[2]
+            }
+            return data
+        finally:
+            self.soup = None
+            gc.collect()

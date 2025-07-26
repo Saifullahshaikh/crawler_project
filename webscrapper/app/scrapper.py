@@ -374,9 +374,6 @@ proxies = {
 class ProductDataScraper:
     def __init__(self, headers=None):
         self.headers = headers or {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        self.session = requests.Session()
-        self.session.headers.update(self.headers)
-        self.session.proxies.update(proxies)
 
     def get_image_url(self, soup):
         container = soup.select_one('.box-image .image-zoom_in a')
@@ -394,102 +391,104 @@ class ProductDataScraper:
     def scrape_url(self, url):
         url_data = {"url": url, "products": []}
         try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")
+            with requests.Session() as session:
+                session.headers.update(self.headers)
+                session.proxies.update(proxies)
+                with session.get(url, timeout=10, stream=True) as response:
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.content, "html.parser")
 
-            # Pattern 2: Product divs
-            products_div = soup.find_all("div", class_=["product-small", "product-inner", 'fusion-post-cards', 'product'])
-            ul_products = soup.find("ul", class_="products")
-            if ul_products:
-                products_div = products_div or ul_products.find_all("li", recursive=False)
+                    # Pattern 2: Product divs
+                    products_div = soup.find_all("div", class_=["product-small", "product-inner", 'fusion-post-cards', 'product'])
+                    ul_products = soup.find("ul", class_="products")
+                    if ul_products:
+                        products_div = products_div or ul_products.find_all("li", recursive=False)
 
-            def process_product(product):
-                name_tag = (
-                    product.find("p", class_=["name", "product-title"]) or
-                    product.find("a", class_="product-loop-title") or
-                    (
-                        product.find("a", class_="product-loop-title").find("h3", class_=["woocommerce-loop-product__title", "wd-entities-title"])
-                        if product.find("a", class_="product-loop-title") else None
-                    ) or
-                    product.find("h3", class_=["woocommerce-loop-product__title", "wd-entities-title"]) or
-                    product.find("h2", class_=["woocommerce-loop-product__title", "wd-entities-title"])
-                )
-                name = name_tag.text.strip() if name_tag else None
-                price_tag = product.find("span", class_="woocommerce-Price-amount amount")
-                price = price_tag.text.strip() if price_tag else None
-                link_tag = product.find("a", href=True)
-                product_url = link_tag['href'] if link_tag else None
-                img_tag = product.find("img", class_=["attachment-woocommerce_thumbnail", "wp-post-image", "card-img-top"])
-                if not img_tag:
-                    image_div = product.find("div", class_=["product-image", "image-zoom_in"])
-                    if image_div:
-                        img_tag = image_div.find("img")
-                image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else self.get_image_url(soup)
-                product_details = ProductScraper(product_url).scrape() if product_url else {}
-                return {
-                    "name": name,
-                    "price": price,
-                    "product_url": product_url,
-                    "image_url": image_url or product_details.get('Image URL'),
-                    "product_details": product_details
-                }
+                    def process_product(product):
+                        name_tag = (
+                            product.find("p", class_=["name", "product-title"]) or
+                            product.find("a", class_="product-loop-title") or
+                            (
+                                product.find("a", class_="product-loop-title").find("h3", class_=["woocommerce-loop-product__title", "wd-entities-title"])
+                                if product.find("a", class_="product-loop-title") else None
+                            ) or
+                            product.find("h3", class_=["woocommerce-loop-product__title", "wd-entities-title"]) or
+                            product.find("h2", class_=["woocommerce-loop-product__title", "wd-entities-title"])
+                        )
+                        name = name_tag.text.strip() if name_tag else None
+                        price_tag = product.find("span", class_="woocommerce-Price-amount amount")
+                        price = price_tag.text.strip() if price_tag else None
+                        link_tag = product.find("a", href=True)
+                        product_url = link_tag['href'] if link_tag else None
+                        img_tag = product.find("img", class_=["attachment-woocommerce_thumbnail", "wp-post-image", "card-img-top"])
+                        if not img_tag:
+                            image_div = product.find("div", class_=["product-image", "image-zoom_in"])
+                            if image_div:
+                                img_tag = image_div.find("img")
+                        image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else self.get_image_url(soup)
+                        product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        return {
+                            "name": name,
+                            "price": price,
+                            "product_url": product_url,
+                            "image_url": image_url or product_details.get('Image URL'),
+                            "product_details": product_details
+                        }
 
-            # Pattern 1: Products section
-            def process_section_product(product):
-                name_tag = product.select_one("h3.product-name a")
-                name = name_tag.text.strip() if name_tag else None
-                product_url = name_tag['href'] if name_tag and name_tag.has_attr('href') else None
-                price_tag = product.select_one("span.price ins span.woocommerce-Price-amount") or \
-                            product.select_one("span.price span.woocommerce-Price-amount")
-                price = price_tag.text.strip() if price_tag else None
-                img_tag = product.select_one("img.wp-post-image")
-                image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
-                product_details = ProductScraper(product_url).scrape() if product_url else {}
-                return {
-                    "name": name,
-                    "price": price,
-                    "product_url": product_url,
-                    "image_url": image_url or product_details.get('Image URL'),
-                    "product_details": product_details
-                }
+                    # Pattern 1: Products section
+                    def process_section_product(product):
+                        name_tag = product.select_one("h3.product-name a")
+                        name = name_tag.text.strip() if name_tag else None
+                        product_url = name_tag['href'] if name_tag and name_tag.has_attr('href') else None
+                        price_tag = product.select_one("span.price ins span.woocommerce-Price-amount") or \
+                                    product.select_one("span.price span.woocommerce-Price-amount")
+                        price = price_tag.text.strip() if price_tag else None
+                        img_tag = product.select_one("img.wp-post-image")
+                        image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
+                        product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        return {
+                            "name": name,
+                            "price": price,
+                            "product_url": product_url,
+                            "image_url": image_url or product_details.get('Image URL'),
+                            "product_details": product_details
+                        }
 
-            # Pattern 5: JackFit style
-            def process_jackfit_product(item):
-                a_tag = item.find("a", href=True)
-                product_url = a_tag['href'] if a_tag else None
-                if not product_url:
-                    h4_tag = item.find("h4", class_="fusion-title-heading")
-                    a_inside_h4 = h4_tag.find("a", href=True) if h4_tag else None
-                    product_url = a_inside_h4['href'] if a_inside_h4 else None
-                name = a_tag['title'] if a_tag and a_tag.has_attr('title') else None
-                if not name and a_inside_h4:
-                    name = a_inside_h4.get_text(strip=True)
-                img_tag = item.find("img")
-                image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
-                price_tag = item.find("span", class_="price") or item.find("span", class_="woocommerce-Price-amount")
-                price = price_tag.get_text(strip=True) if price_tag else None
-                product_details = ProductScraper(product_url).scrape() if product_url else {}
-                return {
-                    "name": name,
-                    "price": price,
-                    "product_url": product_url,
-                    "image_url": image_url or product_details.get('Image URL'),
-                    "product_details": product_details
-                }
+                    # Pattern 5: JackFit style
+                    def process_jackfit_product(item):
+                        a_tag = item.find("a", href=True)
+                        product_url = a_tag['href'] if a_tag else None
+                        if not product_url:
+                            h4_tag = item.find("h4", class_="fusion-title-heading")
+                            a_inside_h4 = h4_tag.find("a", href=True) if h4_tag else None
+                            product_url = a_inside_h4['href'] if a_inside_h4 else None
+                        name = a_tag['title'] if a_tag and a_tag.has_attr('title') else None
+                        if not name and a_inside_h4:
+                            name = a_inside_h4.get_text(strip=True)
+                        img_tag = item.find("img")
+                        image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
+                        price_tag = item.find("span", class_="price") or item.find("span", class_="woocommerce-Price-amount")
+                        price = price_tag.get_text(strip=True) if price_tag else None
+                        product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        return {
+                            "name": name,
+                            "price": price,
+                            "product_url": product_url,
+                            "image_url": image_url or product_details.get('Image URL'),
+                            "product_details": product_details
+                        }
 
-            # Parallel processing of products
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                products = list(executor.map(process_product, products_div))
-                products.extend(executor.map(process_section_product, soup.select("div.products section.product")))
-                products.extend(executor.map(process_jackfit_product, soup.select("li.product-grid-view.product")))
-            url_data["products"] = [p for p in products if p["name"] and p["product_url"]]
-            logging.info(f"Scraped {len(url_data['products'])} products from {url}")
+                    # Parallel processing with reduced workers
+                    with ThreadPoolExecutor(max_workers=3) as executor:
+                        products = list(executor.map(process_product, products_div))
+                        products.extend(executor.map(process_section_product, soup.select("div.products section.product")))
+                        products.extend(executor.map(process_jackfit_product, soup.select("li.product-grid-view.product")))
+                    url_data["products"] = [p for p in products if p["name"] and p["product_url"]]
+                    logging.info(f"Scraped {len(url_data['products'])} products from {url}")
+            soup = None
+            return url_data
         except Exception as e:
             logging.error(f"Failed to retrieve {url}: {e}")
+            return url_data
         finally:
             gc.collect()
-        return url_data
-
-    def __del__(self):
-        self.session.close()  # Ensure session is closed
