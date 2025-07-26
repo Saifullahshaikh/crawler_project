@@ -756,54 +756,60 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=3):
             logging.info(f"Crawling paginated shop page: {paginated_url}")
             paginated_urls.add(paginated_url)
             
-            try:
-                with session.get(paginated_url, timeout=10, stream=True) as response:
-                    if response.status_code in [404, 403, 410]:
-                        logging.info(f"Page {paginated_url} returned status {response.status_code}. Ending pagination.")
-                        break
-                    response.raise_for_status()
-                    
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    scraper = ProductDataScraper()
-                    scraped_data = scraper.scrape_url(paginated_url)
-                    if scraped_data and "products" in scraped_data and scraped_data["products"]:
-                        logging.info(f"Scraped {len(scraped_data['products'])} products from {paginated_url}")
-                        save_single_url_data_to_db(job_id, scraped_data)
-                        to_visit.append(paginated_url)
-                    
-                    next_link = soup.find('a', class_=['next', 'page-numbers next', 'pagination-next'])
-                    has_next_page = bool(next_link and next_link.get('href'))
-                    logging.info(f"Next page link {'found' if has_next_page else 'not found'} for {paginated_url}")
-                    
-                    page += 1
-            except requests.exceptions.RequestException as e:
-                logging.warning(f"Attempt {attempt + 1} failed for {paginated_url}: {e}")
-                if attempt + 1 == max_retries:
-                    logging.error(f"Max retries reached for {paginated_url}. Marking as failed.")
-                    failed_urls.add(paginated_url)
-                    page += 1
-                    continue
-                time.sleep(2 ** attempt)
-            finally:
-                soup = None
-                scraper = None
-                gc.collect()
-                mem_usage = log_memory_usage()
-                if mem_usage > max_memory_mb:
-                    logging.warning(f"Memory usage ({mem_usage:.2f} MB) exceeds threshold. Clearing caches.")
-                    get_word_sequences.cache_clear()
-                    extract_dynamic_hrefs.cache_clear()
-                if page % 10 == 0:
-                    get_word_sequences.cache_clear()
-                    extract_dynamic_hrefs.cache_clear()
-                    logging.info("Cleared lru_cache to free memory")
-                    # Prune visited set to keep only recent URLs
-                    if len(visited) > 10000:
-                        visited.clear()
-                        visited.update(to_visit)
-                        visited.update(paginated_urls)
-                        visited.update(failed_urls)
-                        logging.info("Pruned visited set to reduce memory")
+            for attempt in range(max_retries):
+                try:
+                    with session.get(paginated_url, timeout=10, stream=True) as response:
+                        if response.status_code in [404, 403, 410]:
+                            logging.info(f"Page {paginated_url} returned status {response.status_code}. Ending pagination.")
+                            break
+                        response.raise_for_status()
+                        
+                        soup = BeautifulSoup(response.content, 'html.parser')
+                        scraper = ProductDataScraper()
+                        scraped_data = scraper.scrape_url(paginated_url)
+                        if scraped_data and "products" in scraped_data and scraped_data["products"]:
+                            logging.info(f"Scraped {len(scraped_data['products'])} products from {paginated_url}")
+                            save_single_url_data_to_db(job_id, scraped_data)
+                            to_visit.append(paginated_url)
+                        
+                        next_link = soup.find('a', class_=['next', 'page-numbers next', 'pagination-next'])
+                        has_next_page = bool(next_link and next_link.get('href'))
+                        logging.info(f"Next page link {'found' if has_next_page else 'not found'} for {paginated_url}")
+                        
+                        page += 1
+                        break  # Success, break out of retry loop
+                except requests.exceptions.RequestException as e:
+                    logging.warning(f"Attempt {attempt + 1} failed for {paginated_url}: {e}")
+                    if attempt + 1 == max_retries:
+                        logging.error(f"Max retries reached for {paginated_url}. Marking as failed.")
+                        failed_urls.add(paginated_url)
+                        page += 1
+                        break  # Exit retry loop
+                    time.sleep(2 ** attempt)
+                finally:
+                    soup = None
+                    scraper = None
+                    gc.collect()
+                    mem_usage = log_memory_usage()
+                    if mem_usage > max_memory_mb:
+                        logging.warning(f"Memory usage ({mem_usage:.2f} MB) exceeds threshold. Clearing caches.")
+                        get_word_sequences.cache_clear()
+                        extract_dynamic_hrefs.cache_clear()
+                    if page % 10 == 0:
+                        get_word_sequences.cache_clear()
+                        extract_dynamic_hrefs.cache_clear()
+                        logging.info("Cleared lru_cache to free memory")
+                        # Prune visited set to keep only recent URLs
+                        if len(visited) > 10000:
+                            visited.clear()
+                            visited.update(to_visit)
+                            visited.update(paginated_urls)
+                            visited.update(failed_urls)
+                            logging.info("Pruned visited set to reduce memory")
+            else:
+                # If retry loop exhausted without break, move to next page
+                page += 1
+                continue
 
         # Parallel recursive crawling
         logging.info("Starting recursive link crawling...")
