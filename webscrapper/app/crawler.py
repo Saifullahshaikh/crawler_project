@@ -810,4 +810,4 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=5):
                 log_memory_usage()
 
     logging.info(f"Total URLs crawled: {len(visited)}")
-    return all_products_data
+    return []
