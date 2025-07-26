@@ -427,11 +427,20 @@ class ProductDataScraper:
                                 img_tag = image_div.find("img")
                         image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else self.get_image_url(soup)
                         product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        if product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 1:
+                            image_url_final = product_details.get('Thumbnail Images')[1]
+                        elif product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 0:
+                            image_url_final = product_details.get('Thumbnail Images')[0]
+                        elif product_details.get('Image URL'):
+                            image_url_final = product_details.get('Image URL')
+                        else:
+                            image_url_final = image_url
+
                         return {
                             "name": name,
                             "price": price,
                             "product_url": product_url,
-                            "image_url": image_url or product_details.get('Image URL'),
+                            "image_url": image_url_final,
                             "product_details": product_details
                         }
 
@@ -446,11 +455,20 @@ class ProductDataScraper:
                         img_tag = product.select_one("img.wp-post-image")
                         image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
                         product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        if product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 1:
+                            image_url_final = product_details.get('Thumbnail Images')[1]
+                        elif product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 0:
+                            image_url_final = product_details.get('Thumbnail Images')[0]
+                        elif product_details.get('Image URL'):
+                            image_url_final = product_details.get('Image URL')
+                        else:
+                            image_url_final = image_url
+
                         return {
                             "name": name,
                             "price": price,
                             "product_url": product_url,
-                            "image_url": image_url or product_details.get('Image URL'),
+                            "image_url": image_url_final,
                             "product_details": product_details
                         }
 
@@ -470,11 +488,20 @@ class ProductDataScraper:
                         price_tag = item.find("span", class_="price") or item.find("span", class_="woocommerce-Price-amount")
                         price = price_tag.get_text(strip=True) if price_tag else None
                         product_details = ProductScraper(product_url, session).scrape() if product_url else {}
+                        if product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 1:
+                            image_url_final = product_details.get('Thumbnail Images')[1]
+                        elif product_details.get('Thumbnail Images') and len(product_details.get('Thumbnail Images')) > 0:
+                            image_url_final = product_details.get('Thumbnail Images')[0]
+                        elif product_details.get('Image URL'):
+                            image_url_final = product_details.get('Image URL')
+                        else:
+                            image_url_final = image_url
+
                         return {
                             "name": name,
                             "price": price,
                             "product_url": product_url,
-                            "image_url": image_url or product_details.get('Image URL'),
+                            "image_url": image_url_final,
                             "product_details": product_details
                         }
 
