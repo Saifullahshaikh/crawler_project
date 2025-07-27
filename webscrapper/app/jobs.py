@@ -3,6 +3,7 @@ import requests
 from django.utils import timezone
 from .models import ScheduledJob, UserSession
 from django.utils.timezone import localtime
+from datetime import timedelta
 
 
 def run_scheduled_jobs_if_frontend_offline():
@@ -17,6 +18,26 @@ def run_scheduled_jobs_if_frontend_offline():
     if UserSession.objects.filter(status__in=['running', 'pending']).exists():
         print("[BLOCKED] Another job is already running or pending. Skipping all scheduled jobs.")
         return
+
+    # Check for the latest failed job due to network issues within last 10 minutes
+    ten_minutes_ago = now - timedelta(minutes=10)
+    failed_job = UserSession.objects.filter(
+        status='failed',
+        updated_at__gte=ten_minutes_ago,
+        error__icontains='network'  # Using 'error' field from UserSession model
+    ).order_by('-updated_at').first()
+
+    if failed_job:
+        try:
+            print(f"[INFO] Found latest failed job {failed_job.job_id} due to network issue. Retrying...")
+            failed_job.status = 'running'
+            failed_job.progress = 0
+            failed_job.error = None  # Clear previous error
+            failed_job.updated_at = now
+            failed_job.save()
+            print(f"[OK] Job {failed_job.job_id} status changed to running")
+        except Exception as e:
+            print(f"[ERROR] Failed to retry job {failed_job.job_id}: {e}")
 
     scheduled_jobs = ScheduledJob.objects.filter(
         scheduled_hour=current_hour,
