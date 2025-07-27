@@ -1056,7 +1056,7 @@ def crawl_links_recursively(base_url, job_id=None, max_workers=3):
             for attempt in range(max_retries):
                 try:
                     with session.get(paginated_url, timeout=10, stream=True) as response:
-                        if response.status_code in [404, 403, 410]:
+                        if response.status_code in [404, 403, 410, 406]:
                             logging.info(f"Page {paginated_url} returned status {response.status_code}. Ending pagination.")
                             pagination_ended = True
                             break
