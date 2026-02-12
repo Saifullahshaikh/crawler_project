@@ -1,58 +1,97 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, PlusCircle, Trash2, RefreshCw, CheckCircle, AlertCircle } from "lucide-react"
+import {
+  Card, CardContent, CardHeader, CardTitle, CardDescription,
+} from "@/components/ui/card"
+import {
+  Loader2, PlusCircle, Trash2, RefreshCw, CheckCircle, AlertCircle, Bookmark,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
+import { useScrapingStore } from "@/lib/store"
+import djangoApiService from "@/lib/django-api-service"
+
+import { useUIStore } from "@/lib/ui-store"
+
 
 interface CrawlStatus {
-  status: "pending" | "running" | "completed" | "failed"
+  status: "undefined" | "pending" | "running" | "completed" | "failed" 
   progress: number
   message?: string
   error?: string
 }
 
-export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: string) => void }) {
-  const [urls, setUrls] = useState<string[]>([
-    "https://www.nyjacket.com/",
-    "https://www.californiajacket.com/",
-    "https://wonderjackets.com/",
-    "https://www.danezon.com/",
-    "https://www.jacketsjunction.com/",
-    "https://www.primejackets.com/",
-    "https://www.jackfitleathers.com/",
-    "http://newamericanjackets.com/",
-    "https://www.usajacket.com/",
-    "https://www.usaleatherfactory.com/",
+interface CrawlerFormProps {
+  onScrapeComplete: (jobId?: string) => void
+  userId: string
+  urls?: string[]
+  setUrls?: (urls: string[]) => void
+}
+
+export function CrawlerForm({ onScrapeComplete, userId, urls: externalUrls, setUrls: setExternalUrls }: CrawlerFormProps) {
+  const [internalUrls, setInternalUrls] = useState<string[]>([""
   ])
+
+  const urls = externalUrls || internalUrls
+  const setUrls = setExternalUrls || setInternalUrls
+
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingSession, setIsCheckingSession] = useState(true)
   const [jobId, setJobId] = useState<string | null>(null)
   const [status, setStatus] = useState<CrawlStatus | null>(null)
-  const { toast } = useToast()
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const { toast } = useToast()
+  const { addSavedUrl } = useScrapingStore()
 
-  // Clean up polling on unmount
+  const { showManualButton } = useUIStore()
+
   useEffect(() => {
     return () => {
-      if (pollingRef.current) {
-        clearTimeout(pollingRef.current)
-      }
+      if (pollingRef.current) clearTimeout(pollingRef.current)
     }
   }, [])
 
-  const addUrlField = () => {
-    setUrls([...urls, ""])
-  }
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const { active_session } = await djangoApiService.getUserSessions(userId)
+
+        if (active_session && ["pending", "running"].includes(active_session.status)) {
+          setJobId(active_session.job_id)
+          setUrls(active_session.urls)
+          setStatus({
+            status: active_session.status,
+            progress: active_session.progress,
+            message: active_session.message || getStatusMessage(active_session.status, active_session.progress),
+            error: active_session.error || "",
+          })
+          setIsLoading(true)
+          pollJobStatus(active_session.job_id)
+
+          toast({
+            title: "Session Restored",
+            description: `Resumed crawling for ${active_session.urls.length} URL(s)`,
+          })
+        }
+      } catch (err) {
+        console.error("Failed to restore session:", err)
+      } finally {
+        setIsCheckingSession(false)
+      }
+    }
+
+    restoreSession()
+  }, [userId])
+
+  const addUrlField = () => setUrls([...urls, ""])
 
   const removeUrlField = (index: number) => {
     const newUrls = [...urls]
     newUrls.splice(index, 1)
-    // Ensure at least one URL field remains
     setUrls(newUrls.length ? newUrls : [""])
   }
 
@@ -62,12 +101,24 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     setUrls(newUrls)
   }
 
+  const handleSaveUrl = (url: string) => {
+    if (!url.trim()) {
+      toast({ title: "Invalid URL", description: "Please enter a valid URL", variant: "destructive" })
+      return
+    }
+
+    try {
+      new URL(url)
+      addSavedUrl(url.trim())
+      toast({ title: "URL Saved", description: "URL has been added to your saved list" })
+    } catch {
+      toast({ title: "Invalid URL", description: "Please enter a valid URL format", variant: "destructive" })
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    // Filter out empty URLs
     const validUrls = urls.filter((url) => url.trim() !== "")
-
     if (validUrls.length === 0) {
       toast({
         title: "URL is required",
@@ -81,30 +132,32 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
     setStatus({ status: "pending", progress: 0, message: "Starting crawl process..." })
 
     try {
-      const response = await fetch("http://167.172.143.147:8000/api/crawl/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: validUrls }),
       })
 
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to start crawling")
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to start crawling")
-      }
-
-      setJobId(data.jobId)
+      const jobId = data.jobId
+      setJobId(jobId)
       setStatus({ status: "running", progress: 0, message: "Crawling started..." })
+
+      await djangoApiService.createUserSession({
+        job_id: jobId,
+        user_id: userId,
+        urls: validUrls,
+        status: "running",
+      })
 
       toast({
         title: "Crawling started",
         description: `Started crawling ${validUrls.length} URL${validUrls.length > 1 ? "s" : ""}`,
       })
 
-      // Start polling for status
-      pollJobStatus(data.jobId)
+      pollJobStatus(jobId)
     } catch (error) {
       setStatus({
         status: "failed",
@@ -121,96 +174,128 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
   }
 
   const pollJobStatus = async (jobId: string) => {
-    try {
-      const response = await fetch(`http://167.172.143.147:8000/api/crawl/status?jobId=${jobId}`)
-      const data = await response.json()
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/crawl/status?jobId=${jobId}`)
+    const { active_session } = await djangoApiService.getUserSessions(userId)
+    console.log(response)
+    const data = active_session
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to get job status")
-      }
+    console.log("Polling job status:", data)
 
-      // Update status
-      setStatus({
-        status: data.status,
-        progress: data.progress,
-        message: data.message || getStatusMessage(data.status, data.progress),
-        error: data.error,
-      })
-
-      if (data.status === "completed") {
-        setIsLoading(false)
-        toast({
-          title: "Crawling completed",
-          description: `Found ${data.categoryLinks?.length || 0} category links and ${data.productData?.length || 0} products`,
-        })
-
-        // Trigger the callback with the completed job ID
-        onScrapeComplete(jobId)
-      } else if (data.status === "failed") {
-        setIsLoading(false)
-        toast({
-          title: "Crawling failed",
-          description: data.error || "Failed to crawl website",
-          variant: "destructive",
-        })
-      } else {
-        // Still running, poll again after a delay
-        pollingRef.current = setTimeout(() => pollJobStatus(jobId), 2000)
-      }
-    } catch (error) {
-      setStatus({
-        status: "failed",
-        progress: 0,
-        error: error instanceof Error ? error.message : "Failed to get job status",
-      })
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get job status",
-        variant: "destructive",
-      })
-      setIsLoading(false)
+    if (!response.ok) {
+      throw new Error(data?.error || "Failed to get job status")
     }
+
+    const crawlStatus: CrawlStatus = {
+      status: (data && data.status) ? data.status as CrawlStatus["status"] : "undefined",
+      progress: data && typeof data.progress === "number" ? data.progress : 0,
+      message: data && data.message ? data.message : getStatusMessage(data && data.status ? data.status : "undefined", data && typeof data.progress === "number" ? data.progress : 0),
+      error: data && data.error ? data.error : undefined,
+    }
+
+    // Update UI state
+    setStatus(crawlStatus)
+
+    // --- ✅ Handle Completion ---
+    if (data?.status === "completed") {
+      await djangoApiService.updateUserSession(jobId, {
+        status: "completed",
+        progress: 100,
+        message: "Crawling completed successfully",
+      })
+
+      setIsLoading(false)
+
+      // toast({
+      //   title: "Crawling completed",
+      //   description: `Found ${data.categoryLinks?.length || 0} category links and ${data.productData?.length || 0} products`,
+      // })
+
+      onScrapeComplete?.(jobId)
+      console.log("Crawling failed:", data.status)
+    // --- ✅ Handle Failure ---
+    } else if (data?.status === "failed") {
+      const { active_session } = await djangoApiService.getUserSessions(userId)
+      if (!active_session) {
+        // If there is no active session, just update the job status and show error
+        await djangoApiService.updateUserSession(jobId, {
+          status: "failed",
+          progress: data?.progress || 0,
+          error: data?.error || "Unknown error",
+        })
+      } 
+    } else {
+      pollingRef.current = setTimeout(() => pollJobStatus(jobId), 2000)
+    }
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to fetch job status"
+
+    setStatus({
+      status: "failed",
+      progress: 0,
+      error: message,
+    })
+
+    await djangoApiService.updateUserSession(jobId, {
+      status: "failed",
+      progress: 0,
+      error: message,
+    })
+
+    toast({
+      title: "Error",
+      description: message,
+      variant: "destructive",
+    })
+
+    setIsLoading(false)
   }
+}
+
 
   const getStatusMessage = (status: string, progress: number): string => {
     switch (status) {
-      case "pending":
-        return "Preparing to crawl..."
+      case "pending": return "Preparing to crawl..."
       case "running":
         if (progress < 25) return "Connecting to website..."
         if (progress < 50) return "Extracting category links..."
         if (progress < 75) return "Processing product data..."
         return "Finalizing results..."
-      case "completed":
-        return "Crawling completed successfully!"
-      case "failed":
-        return "Crawling failed. Please try again."
-      default:
-        return "Processing..."
+      case "completed": return "Crawling completed successfully!"
+      case "failed": return "Crawling failed. Please try again."
+      default: return "Processing..."
     }
   }
 
   const renderStatusIcon = () => {
     if (!status) return null
-
     switch (status.status) {
-      case "completed":
-        return <CheckCircle className="h-5 w-5 text-green-500" />
-      case "failed":
-        return <AlertCircle className="h-5 w-5 text-red-500" />
+      case "completed": return <CheckCircle className="h-5 w-5 text-green-500" />
+      case "failed": return <AlertCircle className="h-5 w-5 text-red-500" />
       case "running":
-      case "pending":
-        return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />
-      default:
-        return null
+      case "pending": return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />
+      default: return null
     }
+  }
+
+  // ✅ Show full-screen loader while checking session
+  if (isCheckingSession) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+          <p className="text-sm text-muted-foreground">Checking for active session...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Website Crawler</CardTitle>
-        <CardDescription>Enter one or more website URLs to crawl for category links and product data</CardDescription>
+        <CardDescription>Crawling Status and Progress</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -222,52 +307,48 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
                   placeholder="https://example.com"
                   value={url}
                   onChange={(e) => handleUrlChange(index, e.target.value)}
-                  disabled={isLoading}
+                  disabled={true}
                   className="flex-1"
                 />
+                {url.trim() && (
+                  <Button type="button" variant="outline" size="icon" onClick={() => handleSaveUrl(url)} disabled={isLoading}>
+                    <Bookmark className="h-4 w-4" />
+                  </Button>
+                )}
                 {urls.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removeUrlField(index)}
-                    disabled={isLoading}
-                  >
+                  <Button type="button" variant="outline" size="icon" onClick={() => removeUrlField(index)} disabled={isLoading}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </div>
             ))}
           </div>
-
+          
+           {isLoading ? (
           <div className="flex flex-col sm:flex-row gap-2">
-            <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
+            {/* <Button type="button" variant="outline" onClick={addUrlField} disabled={isLoading} className="gap-1">
               <PlusCircle className="h-4 w-4" />
               Add URL
-            </Button>
-
+            </Button> */}
+            {showManualButton && (
             <Button type="submit" disabled={isLoading} className="ml-auto">
-              {isLoading ? (
+             
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Crawling...
                 </>
-              ) : (
-                `Start Crawling (${urls.filter((u) => u.trim() !== "").length} URL${
-                  urls.filter((u) => u.trim() !== "").length !== 1 ? "s" : ""
-                })`
-              )}
             </Button>
+            )}
           </div>
-
+          ): (
+                ``
+              )}
           {status && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {renderStatusIcon()}
-                  <span className="text-sm font-medium">
-                    {status.status.charAt(0).toUpperCase() + status.status.slice(1)}
-                  </span>
+                  <span className="text-sm font-medium">{status.status.charAt(0).toUpperCase() + status.status.slice(1)}</span>
                   {jobId && <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{jobId}</span>}
                 </div>
                 <span className="text-sm text-muted-foreground">{status.progress}%</span>
@@ -275,21 +356,6 @@ export function CrawlerForm({ onScrapeComplete }: { onScrapeComplete: (jobId?: s
               <Progress value={status.progress} className="h-2" />
               <p className="text-sm text-muted-foreground">{status.message || "Processing..."}</p>
               {status.error && <p className="text-sm text-red-500">{status.error}</p>}
-            </div>
-          )}
-
-          {jobId && !isLoading && status?.status === "completed" && (
-            <div className="mt-2 flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onScrapeComplete(jobId)}
-                className="gap-1"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh Data
-              </Button>
             </div>
           )}
         </form>

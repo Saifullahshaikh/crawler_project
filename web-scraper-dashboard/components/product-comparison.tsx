@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Key } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,8 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -31,6 +33,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
+import { serverConfig } from "@/lib/config"
+import { useSessionStore } from "@/lib/session-store"
 
 interface ProductDetails {
   "Image URL"?: string
@@ -57,6 +61,8 @@ interface ProductChangeData {
   created_at?: string
   changes?: {
     [field: string]: {
+      old_date: string | number | Date
+      change_date: string | number | Date
       old: any
       new: any
     }
@@ -64,10 +70,19 @@ interface ProductChangeData {
   change_date?: string
 }
 
+interface Pagination {
+  total: number
+  num_pages: number
+  current_page: number
+  has_next: boolean
+  has_previous: boolean
+}
+
 interface ComparisonData {
   new: ProductChangeData[]
   updated: ProductChangeData[]
   removed: ProductChangeData[]
+  pagination: Pagination
   job_info?: {
     id: string
     urls: string[]
@@ -86,17 +101,33 @@ export function ProductComparison({
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [jobId, setJobId] = useState<string>("")
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
   const [currentJobId, setCurrentJobId] = useState<string>("")
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+  const [currentPage, setCurrentPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
   const { toast } = useToast()
+  const { activeUserSession } = useSessionStore()
 
-  const fetchComparisonData = async (specificJobId?: string) => {
+  const fetchComparisonData = async (specificJobId?: string, page: number = 1, start?: string, end?: string) => {
     setIsLoading(true)
 
     try {
-      const url = `http://167.172.143.147:8000/api/product-changes/?jobId=${specificJobId}`
+      const url = new URL(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/product-changes/`)
+      if (specificJobId || activeUserSession?.job_id) {
+        url.searchParams.append('jobId', specificJobId || activeUserSession?.job_id || '')
+      }
+      url.searchParams.append('page', page.toString())
+      url.searchParams.append('per_page', perPage.toString())
+      if (start) {
+        url.searchParams.append('start_date', start)
+      }
+      if (end) {
+        url.searchParams.append('end_date', end)
+      }
 
-      const response = await fetch(url)
+      const response = await fetch(url.toString())
       const data = await response.json()
 
       if (!response.ok) {
@@ -105,6 +136,7 @@ export function ProductComparison({
 
       setComparisonData(data || null)
       setCurrentJobId(specificJobId || "")
+      setCurrentPage(data.pagination.current_page)
     } catch (error) {
       toast({
         title: "Error",
@@ -116,11 +148,10 @@ export function ProductComparison({
     }
   }
 
-  // Auto-fetch comparison when a job is completed
   useEffect(() => {
     if (completedJobId) {
       setJobId(completedJobId)
-      fetchComparisonData(completedJobId)
+      fetchComparisonData(completedJobId, 1, startDate, endDate)
       toast({
         title: "Comparison Updated",
         description: `Showing changes for completed job: ${completedJobId}`,
@@ -128,25 +159,31 @@ export function ProductComparison({
     }
   }, [completedJobId])
 
-  // Fallback to general comparison on refresh trigger
   useEffect(() => {
     if (!completedJobId) {
-      fetchComparisonData()
+      fetchComparisonData(undefined, 1, startDate, endDate)
     }
   }, [refreshTrigger])
 
   const handleJobIdSearch = () => {
-    if (jobId.trim()) {
-      fetchComparisonData(jobId.trim())
+    if (jobId.trim() || startDate || endDate) {
+      fetchComparisonData(jobId.trim(), 1, startDate, endDate)
     } else {
-      fetchComparisonData()
+      fetchComparisonData(undefined, 1, startDate, endDate)
     }
   }
 
-  const clearJobId = () => {
+  const clearFilters = () => {
     setJobId("")
+    setStartDate("")
+    setEndDate("")
     setCurrentJobId("")
-    fetchComparisonData()
+    setCurrentPage(1)
+    fetchComparisonData(undefined, 1)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    fetchComparisonData(currentJobId || undefined, newPage, startDate, endDate)
   }
 
   const toggleExpanded = (key: string) => {
@@ -213,7 +250,7 @@ export function ProductComparison({
     return (
       <div className="space-y-3">
         {Object.entries(changes).map(([field, change]: [string, any]) => (
-          <div key={field} className="border rounded-lg p-3">
+          <div key={field} className="border rounded-lg pss-3">
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="outline" className="text-xs">
                 {field.replace(/_/g, " ").toUpperCase()}
@@ -415,7 +452,6 @@ export function ProductComparison({
 
         <CardContent className="p-4">
           <div className="space-y-3">
-            {/* Basic Info */}
             <div>
               <h3 className="font-semibold text-sm truncate">{product.details?.Title || product.name}</h3>
               <div className="flex items-center gap-2 mt-1">
@@ -424,7 +460,6 @@ export function ProductComparison({
               </div>
             </div>
 
-            {/* Price Info */}
             <div className="flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
               <div className="flex items-center gap-2">
@@ -441,7 +476,6 @@ export function ProductComparison({
               </div>
             </div>
 
-            {/* Rating */}
             {product.details?.Rating && (
               <div className="flex items-center gap-2">
                 <Star className="h-4 w-4 text-muted-foreground" />
@@ -449,7 +483,6 @@ export function ProductComparison({
               </div>
             )}
 
-            {/* Change Summary for Updated Products */}
             {changeType === "updated" && product.changes && (
               <div className="bg-blue-50 border border-blue-200 rounded p-2">
                 <div className="text-xs font-medium text-blue-800 mb-1">Changes Detected:</div>
@@ -463,7 +496,6 @@ export function ProductComparison({
               </div>
             )}
 
-            {/* Timestamps */}
             {product.created_at && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
@@ -471,9 +503,8 @@ export function ProductComparison({
               </div>
             )}
 
-            {/* External Link */}
             <div className="flex items-center justify-between">
-              <a
+              {/* <a
                 href={product.product_url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -481,7 +512,7 @@ export function ProductComparison({
               >
                 <ExternalLink className="h-3 w-3" />
                 View Product
-              </a>
+              </a> */}
 
               <Button variant="ghost" size="sm" onClick={() => toggleExpanded(cardKey)} className="h-6 px-2 text-xs">
                 <Eye className="h-3 w-3 mr-1" />
@@ -490,12 +521,10 @@ export function ProductComparison({
               </Button>
             </div>
 
-            {/* Expanded Details */}
             <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(cardKey)}>
               <CollapsibleContent>
                 <Separator className="my-3" />
                 <div className="space-y-4">
-                  {/* Product Details */}
                   <div>
                     <div className="text-sm font-medium mb-2 flex items-center gap-2">
                       <Info className="h-4 w-4" />
@@ -504,7 +533,6 @@ export function ProductComparison({
                     {renderProductDetails(product.details)}
                   </div>
 
-                  {/* Detailed Changes for Updated Products */}
                   {changeType === "updated" && product.changes && (
                     <div>
                       <div className="text-sm font-medium mb-2 flex items-center gap-2">
@@ -562,7 +590,6 @@ export function ProductComparison({
 
         const rows = []
 
-        // Add new products
         for (const product of comparisonData.new) {
           rows.push([
             "New Product",
@@ -581,7 +608,6 @@ export function ProductComparison({
           ])
         }
 
-        // Add updated products
         for (const product of comparisonData.updated) {
           if (product.changes) {
             for (const [field, change] of Object.entries(product.changes)) {
@@ -604,7 +630,6 @@ export function ProductComparison({
           }
         }
 
-        // Add removed products
         for (const product of comparisonData.removed) {
           rows.push([
             "Removed Product",
@@ -645,6 +670,12 @@ export function ProductComparison({
         textLines.push(`Generated: ${new Date().toLocaleString()}`)
         if (currentJobId) {
           textLines.push(`Job ID: ${currentJobId}`)
+        }
+        if (startDate) {
+          textLines.push(`Start Date: ${startDate}`)
+        }
+        if (endDate) {
+          textLines.push(`End Date: ${endDate}`)
         }
         if (comparisonData.job_info) {
           textLines.push(`Crawled URLs: ${comparisonData.job_info.urls.join(", ")}`)
@@ -725,7 +756,7 @@ export function ProductComparison({
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `detailed-product-comparison-${currentJobId || "latest"}.${fileExtension}`
+    a.download = `product-comparison-${currentJobId || "latest"}-${startDate || "no-start"}-${endDate || "no-end"}.${fileExtension}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -733,13 +764,57 @@ export function ProductComparison({
 
     toast({
       title: "Download started",
-      description: `Downloading detailed comparison data as ${format.toUpperCase()}`,
+      description: `Downloading comparison data as ${format.toUpperCase()}`,
     })
   }
 
   const totalChanges = comparisonData
     ? comparisonData.new.length + comparisonData.updated.length + comparisonData.removed.length
     : 0
+
+  const [showTooltip, setShowTooltip] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowTooltip(true)
+    }, 30000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  const renderPaginationControls = () => {
+    if (!comparisonData?.pagination) return null
+
+    const { current_page, num_pages, has_next, has_previous } = comparisonData.pagination
+
+    return (
+      <div className="flex items-center justify-between mt-4">
+        <div className="text-sm text-muted-foreground">
+          Page {current_page} of {num_pages} (Total: {comparisonData.pagination.total} changes)
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!has_previous || isLoading}
+            onClick={() => handlePageChange(current_page - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!has_next || isLoading}
+            onClick={() => handlePageChange(current_page + 1)}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Card>
@@ -754,6 +829,14 @@ export function ProductComparison({
                   <>
                     <br />
                     <span className="text-xs font-mono bg-muted px-2 py-1 rounded">Job: {currentJobId}</span>
+                  </>
+                )}
+                {(startDate || endDate) && (
+                  <>
+                    <br />
+                    <span className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                      {startDate ? `From: ${startDate}` : ""} {endDate ? `To: ${endDate}` : ""}
+                    </span>
                   </>
                 )}
                 {comparisonData.job_info && (
@@ -772,43 +855,82 @@ export function ProductComparison({
           </CardDescription>
         </div>
         <div className="flex gap-2">
-          {currentJobId && (
-            <Button variant="outline" size="sm" onClick={clearJobId} className="gap-1">
-              Clear Job
+          {(currentJobId || startDate || endDate) && (
+            <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+              Clear Filters
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => fetchComparisonData(currentJobId || undefined)}
-            disabled={isLoading}
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
+          <div className="relative inline-block">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                fetchComparisonData(currentJobId || undefined, currentPage, startDate, endDate)
+                setShowTooltip(false)
+              }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+            {showTooltip && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-10 w-max bg-gray-800 text-white text-sm px-3 py-2 rounded shadow-lg animate-fadeIn">
+                Refresh to see latest changes
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Job ID Search - Only show if no completed job ID */}
         {!completedJobId && (
-          <div className="flex gap-2 mb-4">
-            <div className="flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
               <Label htmlFor="jobId" className="text-sm font-medium">
                 Job ID (optional)
               </Label>
               <Input
                 id="jobId"
-                placeholder="Enter job ID to get specific comparison..."
+                placeholder="Enter job ID..."
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
                 className="mt-1"
               />
             </div>
-            <div className="flex items-end">
-              <Button onClick={handleJobIdSearch} disabled={isLoading} className="gap-2">
-                <Search className="h-4 w-4" />
-                Search
-              </Button>
+            <div>
+              <Label htmlFor="startDate" className="text-sm font-medium">
+                Start Date (YYYY-MM-DD)
+              </Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="mt-1"
+              />
             </div>
+            <div>
+              <Label htmlFor="endDate" className="text-sm font-medium">
+                End Date (YYYY-MM-DD)
+              </Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        )}
+        {!completedJobId && (
+          <div className="flex justify-end mb-4">
+            <Button onClick={handleJobIdSearch} disabled={isLoading} className="gap-2">
+              <Search className="h-4 w-4" />
+              Apply Filters
+            </Button>
           </div>
         )}
 
@@ -823,435 +945,434 @@ export function ProductComparison({
         ) : totalChanges === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No changes detected.</p>
         ) : (
-          <Tabs defaultValue="summary">
-            <TabsList className="mb-4">
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="new">New ({comparisonData.new.length})</TabsTrigger>
-              <TabsTrigger value="updated">Updated ({comparisonData.updated.length})</TabsTrigger>
-              <TabsTrigger value="removed">Removed ({comparisonData.removed.length})</TabsTrigger>
-            </TabsList>
+          <>
+            <Tabs defaultValue="summary">
+              <TabsList className="mb-4">
+                <TabsTrigger value="summary">Summary</TabsTrigger>
+                <TabsTrigger value="new">New ({comparisonData.new.length})</TabsTrigger>
+                <TabsTrigger value="updated">Updated ({comparisonData.updated.length})</TabsTrigger>
+                <TabsTrigger value="removed">Removed ({comparisonData.removed.length})</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="summary">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Plus className="h-5 w-5 text-green-500" />
-                      <span className="text-2xl font-bold text-green-500">{comparisonData.new.length}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">New Products</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <TrendingUp className="h-5 w-5 text-blue-500" />
-                      <span className="text-2xl font-bold text-blue-500">{comparisonData.updated.length}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Updated Products</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Minus className="h-5 w-5 text-red-500" />
-                      <span className="text-2xl font-bold text-red-500">{comparisonData.removed.length}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Removed Products</p>
-                  </CardContent>
-                </Card>
-              </div>
+              <TabsContent value="summary">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Plus className="h-5 w-5 text-green-500" />
+                        <span className="text-2xl font-bold text-green-500">{comparisonData.new.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">New Products</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <TrendingUp className="h-5 w-5 text-blue-500" />
+                        <span className="text-2xl font-bold text-blue-500">{comparisonData.updated.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Updated Products</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Minus className="h-5 w-5 text-red-500" />
+                        <span className="text-2xl font-bold text-red-500">{comparisonData.removed.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Removed Products</p>
+                    </CardContent>
+                  </Card>
+                </div>
 
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-4">
-                  {comparisonData.updated.slice(0, 3).map((product, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={product.image_url || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-16 h-16 object-cover rounded"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=64&width=64"
-                          }}
-                        />
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-sm">{product.name}</h4>
-                          <p className="text-xs text-muted-foreground">{product.category}</p>
-                          <div className="mt-2 space-y-1">
-                            {product.changes &&
-                              Object.entries(product.changes)
-                                .slice(0, 2)
-                                .map(([field, change]) => (
-                                  <div key={field} className="text-xs">
-                                    <span className="font-medium capitalize">{field}:</span>
-                                    <div className="mt-1">
-                                      {field === "price" ? (
-                                        renderPriceChange(change)
-                                      ) : (
-                                        <span className="ml-1">
-                                          {typeof change.old === "object" ? "Details" : String(change.old)} →{" "}
-                                          {typeof change.new === "object" ? "Updated" : String(change.new)}
-                                        </span>
-                                      )}
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-4">
+                    {comparisonData.updated.slice(0, 3).map((product, index) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <img
+                            src={product.image_url || "/placeholder.svg"}
+                            alt={product.name}
+                            className="w-16 h-16 object-cover rounded"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.svg?height=64&width=64"
+                            }}
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-sm">{product.name}</h4>
+                            <p className="text-xs text-muted-foreground">{product.category}</p>
+                            <div className="mt-2 space-y-1">
+                              {product.changes &&
+                                Object.entries(product.changes)
+                                  .slice(0, 2)
+                                  .map(([field, change]) => (
+                                    <div key={field} className="text-xs">
+                                      <span className="font-medium capitalize">{field}:</span>
+                                      <div className="mt-1">
+                                        {field === "price" ? (
+                                          renderPriceChange(change)
+                                        ) : (
+                                          <span className="ml-1">
+                                            {typeof change.old === "object" ? "Details" : String(change.old)} →{" "}
+                                            {typeof change.new === "object" ? "Updated" : String(change.new)}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  ))}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {comparisonData.updated.length > 3 && (
-                    <p className="text-center text-sm text-muted-foreground">
-                      And {comparisonData.updated.length - 3} more updated products...
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
-            </TabsContent>
+                    ))}
+                    {comparisonData.updated.length > 3 && (
+                      <p className="text-center text-sm text-muted-foreground">
+                        And {comparisonData.updated.length - 3} more updated products...
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
 
-            <TabsContent value="new">
-              <ScrollArea className="h-[600px]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {comparisonData.new.map((product, index) => renderDetailedProductCard(product, "new"))}
-                </div>
-              </ScrollArea>
-            </TabsContent>
+              <TabsContent value="new">
+                <ScrollArea className="h-[600px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {comparisonData.new.map((product, index) => renderDetailedProductCard(product, "new"))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
 
-            <TabsContent value="updated">
-              <ScrollArea className="h-[600px]">
-                {comparisonData.updated.length === 0 ? (
-                  <p className="text-center py-8 text-muted-foreground">No updated products found</p>
-                ) : (
-                  <div className="space-y-6">
-                    {comparisonData.updated.map((product, index) => (
-                      <Card key={index} className="overflow-hidden">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={product.details?.["Image URL"] || product.image_url || "/placeholder.svg"}
-                              alt={product.details?.Title || product.name}
-                              className="w-16 h-16 object-cover rounded"
-                              onError={(e) => {
-                                e.currentTarget.src = "/placeholder.svg?height=64&width=64"
-                              }}
-                            />
-                            <div className="flex-1">
-                              <CardTitle className="text-lg">{product.details?.Title || product.name}</CardTitle>
-                              <CardDescription className="flex items-center gap-2">
-                                <Package className="h-4 w-4" />
-                                {product.category}
-                                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 border-blue-200">
-                                  Updated
-                                </Badge>
-                              </CardDescription>
-                              <div className="flex items-center gap-2 mt-1">
-                                <ExternalLink className="h-3 w-3" />
-                                <a
-                                  href={product.product_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-500 hover:underline truncate"
-                                >
-                                  {product.product_url}
-                                </a>
+              <TabsContent value="updated">
+                <ScrollArea className="h-[600px]">
+                  {comparisonData.updated.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">No updated products found</p>
+                  ) : (
+                    <div className="space-y-6">
+                      {comparisonData.updated.map((product, index) => (
+                        <Card key={index} className="overflow-hidden">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={product.details?.["Image URL"] || product.image_url || "/placeholder.svg"}
+                                alt={product.details?.Title || product.name}
+                                className="w-16 h-16 object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/placeholder.svg?height=64&width=64"
+                                }}
+                              />
+                              <div className="flex-1">
+                                <CardTitle className="text-lg">{product.details?.Title || product.name}</CardTitle>
+                                <CardDescription className="flex items-center gap-2">
+                                  <Package className="h-4 w-4" />
+                                  {product.category}
+                                  <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 border-blue-200">
+                                    Updated
+                                  </Badge>
+                                </CardDescription>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <ExternalLink className="h-3 w-3" />
+                                  <a
+                                    href={product.product_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-500 hover:underline truncate"
+                                  >
+                                    {product.product_url}
+                                  </a>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          {/* Comparison Table */}
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse border border-gray-200 rounded-lg">
-                              <thead>
-                                <tr className="bg-gray-50">
-                                  <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-700">
-                                    Field
-                                  </th>
-                                  <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-red-700">
-                                    <div className="flex items-center gap-2">
-                                      <Calendar className="h-4 w-4" />
-                                      Previous Data
-                                    </div>
-                                  </th>
-                                  <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-green-700">
-                                    <div className="flex items-center gap-2">
-                                      <Calendar className="h-4 w-4" />
-                                      Current Data
-                                    </div>
-                                  </th>
-                                  <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-blue-700">
-                                    Change
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {/* Price Row */}
-                                {product.changes?.price && (
-                                  <tr className="hover:bg-gray-50">
-                                    <td className="border border-gray-200 px-4 py-3 font-medium">Price</td>
-                                    <td className="border border-gray-200 px-4 py-3 bg-red-50">
-                                      <div className="space-y-1">
-                                        <div className="text-lg font-semibold text-red-700">
-                                          ${product.changes.price.old}
-                                        </div>
-                                        <div className="text-xs text-red-600 flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
-                                          {new Date(product.changes.price.old_date).toLocaleString()}
-                                        </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse border border-gray-200 rounded-lg">
+                                <thead>
+                                  <tr className="bg-gray-50">
+                                    <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-700">
+                                      Field
+                                    </th>
+                                    <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-red-700">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        Previous Data
                                       </div>
-                                    </td>
-                                    <td className="border border-gray-200 px-4 py-3 bg-green-50">
-                                      <div className="space-y-1">
-                                        <div className="text-lg font-semibold text-green-700">
-                                          ${product.changes.price.new}
-                                        </div>
-                                        <div className="text-xs text-green-600 flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
-                                          {new Date(product.changes.price.change_date).toLocaleString()}
-                                        </div>
+                                    </th>
+                                    <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-green-700">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        Current Data
                                       </div>
-                                    </td>
-                                    <td className="border border-gray-200 px-4 py-3">
-                                      {(() => {
-                                        const oldPrice = Number.parseFloat(product.changes.price.old)
-                                        const newPrice = Number.parseFloat(product.changes.price.new)
-                                        const difference = newPrice - oldPrice
-                                        const percentChange =
-                                          oldPrice > 0 ? ((difference / oldPrice) * 100).toFixed(1) : "0"
-                                        const isIncrease = difference > 0
-
-                                        return (
-                                          <div className="flex items-center gap-2">
-                                            {isIncrease ? (
-                                              <TrendingUp className="h-4 w-4 text-red-500" />
-                                            ) : (
-                                              <TrendingDown className="h-4 w-4 text-green-500" />
-                                            )}
-                                            <div className="text-sm">
-                                              <div
-                                                className={`font-semibold ${isIncrease ? "text-red-600" : "text-green-600"}`}
-                                              >
-                                                {isIncrease ? "+" : ""}${difference.toFixed(2)}
-                                              </div>
-                                              <div
-                                                className={`text-xs ${isIncrease ? "text-red-500" : "text-green-500"}`}
-                                              >
-                                                {isIncrease ? "+" : ""}
-                                                {percentChange}%
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )
-                                      })()}
-                                    </td>
+                                    </th>
+                                    <th className="border border-gray-200 px-4 py-3 text-left text-sm font-medium text-blue-700">
+                                      Change
+                                    </th>
                                   </tr>
-                                )}
+                                </thead>
+                                <tbody>
+                                  {product.changes?.price && (
+                                    <tr className="hover:bg-gray-50">
+                                      <td className="border border-gray-200 px-4 py-3 font-medium">Price</td>
+                                      <td className="border border-gray-200 px-4 py-3 bg-red-50">
+                                        <div className="space-y-1">
+                                          <div className="text-lg font-semibold text-red-700">
+                                            ${product.changes.price.old}
+                                          </div>
+                                          <div className="text-xs text-red-600 flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {new Date(product.changes.price.old_date).toLocaleString()}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="border border-gray-200 px-4 py-3 bg-green-50">
+                                        <div className="space-y-1">
+                                          <div className="text-lg font-semibold text-green-700">
+                                            ${product.changes.price.new}
+                                          </div>
+                                          <div className="text-xs text-green-600 flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {new Date(product.changes.price.change_date).toLocaleString()}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="border border-gray-200 px-4 py-3">
+                                        {(() => {
+                                          const oldPrice = Number.parseFloat(product.changes.price.old)
+                                          const newPrice = Number.parseFloat(product.changes.price.new)
+                                          const difference = newPrice - oldPrice
+                                          const percentChange =
+                                            oldPrice > 0 ? ((difference / oldPrice) * 100).toFixed(1) : "0"
+                                          const isIncrease = difference > 0
 
-                                {/* Product Details Rows */}
-                                {product.details &&
-                                  Object.entries(product.details).map(([key, value]) => {
-                                    // Skip certain fields that are handled separately or are not useful to display
-                                    if (key === "Image URL" || key === "Previous Price" || key === "New Price")
-                                      return null
-
-                                    const hasChange =
-                                      product.changes?.details &&
-                                      product.changes.details.old &&
-                                      product.changes.details.old[key] !== undefined
-
-                                    const oldValue = hasChange ? product.changes.details.old[key] : "Not available"
-                                    const newValue = value
-
-                                    return (
-                                      <tr key={key} className="hover:bg-gray-50">
-                                        <td className="border border-gray-200 px-4 py-3 font-medium">
-                                          {key.replace(/([A-Z])/g, " $1").trim()}
-                                        </td>
-                                        <td className="border border-gray-200 px-4 py-3 bg-red-50">
-                                          <div className="space-y-1">
-                                            <div className="text-sm">
-                                              {Array.isArray(oldValue) ? (
-                                                <div className="space-y-1">
-                                                  {oldValue.length > 0 ? (
-                                                    oldValue.map((item, i) => (
-                                                      <Badge key={i} variant="outline" className="text-xs mr-1 mb-1">
-                                                        {item}
-                                                      </Badge>
-                                                    ))
-                                                  ) : (
-                                                    <span className="text-gray-500 italic">No items</span>
-                                                  )}
-                                                </div>
-                                              ) : oldValue === null ? (
-                                                <span className="text-gray-500 italic">Not available</span>
+                                          return (
+                                            <div className="flex items-center gap-2">
+                                              {isIncrease ? (
+                                                <TrendingUp className="h-4 w-4 text-red-500" />
                                               ) : (
-                                                <span>{String(oldValue)}</span>
+                                                <TrendingDown className="h-4 w-4 text-green-500" />
+                                              )}
+                                              <div className="text-sm">
+                                                <div
+                                                  className={`font-semibold ${isIncrease ? "text-red-600" : "text-green-600"}`}
+                                                >
+                                                  {isIncrease ? "+" : ""}${difference.toFixed(2)}
+                                                </div>
+                                                <div
+                                                  className={`text-xs ${isIncrease ? "text-red-500" : "text-green-500"}`}
+                                                >
+                                                  {isIncrease ? "+" : ""}
+                                                  {percentChange}%
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )
+                                        })()}
+                                      </td>
+                                    </tr>
+                                  )}
+
+                                  {product.details &&
+                                    Object.entries(product.details).map(([key, value]) => {
+                                      if (key === "Image URL" || key === "Previous Price" || key === "New Price")
+                                        return null
+
+                                      const hasChange =
+                                        product.changes?.details &&
+                                        product.changes.details.old &&
+                                        product.changes.details.old[key] !== undefined
+
+                                      const oldValue = hasChange ? product.changes?.details?.old?.[key] : "Not available"
+                                      const newValue = value
+
+                                      return (
+                                        <tr key={key} className="hover:bg-gray-50">
+                                          <td className="border border-gray-200 px-4 py-3 font-medium">
+                                            {key.replace(/([A-Z])/g, " $1").trim()}
+                                          </td>
+                                          <td className="border border-gray-200 px-4 py-3 bg-red-50">
+                                            <div className="space-y-1">
+                                              <div className="text-sm">
+                                                {Array.isArray(oldValue) ? (
+                                                  <div className="space-y-1">
+                                                    {oldValue.length > 0 ? (
+                                                      oldValue.map((item, i) => (
+                                                        <Badge key={i} variant="outline" className="text-xs mr-1 mb-1">
+                                                          {item}
+                                                        </Badge>
+                                                      ))
+                                                    ) : (
+                                                      <span className="text-gray-500 italic">No items</span>
+                                                    )}
+                                                  </div>
+                                                ) : oldValue === null ? (
+                                                  <span className="text-gray-500 italic">Not available</span>
+                                                ) : (
+                                                  <span>{String(oldValue)}</span>
+                                                )}
+                                              </div>
+                                              {hasChange && product.changes?.details?.old_date && (
+                                                <div className="text-xs text-red-600 flex items-center gap-1">
+                                                  <Calendar className="h-3 w-3" />
+                                                  {new Date(product.changes.details.old_date).toLocaleString()}
+                                                </div>
                                               )}
                                             </div>
-                                            {hasChange && product.changes.details.old_date && (
-                                              <div className="text-xs text-red-600 flex items-center gap-1">
+                                          </td>
+                                          <td className="border border-gray-200 px-4 py-3 bg-green-50">
+                                            <div className="space-y-1">
+                                              <div className="text-sm">
+                                                {Array.isArray(newValue) ? (
+                                                  <div className="space-y-1">
+                                                    {newValue.length > 0 ? (
+                                                      newValue.map((item, i) => (
+                                                        <Badge key={i} variant="outline" className="text-xs mr-1 mb-1">
+                                                          {item}
+                                                        </Badge>
+                                                      ))
+                                                    ) : (
+                                                      <span className="text-gray-500 italic">No items</span>
+                                                    )}
+                                                  </div>
+                                                ) : newValue === null ? (
+                                                  <span className="text-gray-500 italic">Not available</span>
+                                                ) : (
+                                                  <span>{String(newValue)}</span>
+                                                )}
+                                              </div>
+                                              <div className="text-xs text-green-600 flex items-center gap-1">
                                                 <Calendar className="h-3 w-3" />
-                                                {new Date(product.changes.details.old_date).toLocaleString()}
+                                                {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
+                                              </div>
+                                            </div>
+                                          </td>
+                                          <td className="border border-gray-200 px-4 py-3">
+                                            {hasChange ? (
+                                              <div className="flex items-center gap-1">
+                                                <TrendingUp className="h-3 w-3 text-blue-500" />
+                                                <span className="text-xs text-blue-600">Modified</span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-1">
+                                                <Plus className="h-3 w-3 text-green-500" />
+                                                <span className="text-xs text-green-600">Added</span>
                                               </div>
                                             )}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+
+                                  {product.details?.["Thumbnail Images"] && (
+                                    <tr className="hover:bg-gray-50">
+                                      <td className="border border-gray-200 px-4 py-3 font-medium">Thumbnail Images</td>
+                                      <td className="border border-gray-200 px-4 py-3 bg-red-50">
+                                        <div className="space-y-1">
+                                          <div className="flex gap-2 overflow-x-auto pb-2">
+                                            {product.changes?.details?.old?.["Thumbnail Images"] ? (
+                                              product.changes.details.old["Thumbnail Images"].map((img: any, idx: number) => (
+                                                <img
+                                                  key={idx}
+                                                  src={img || "/placeholder.svg"}
+                                                  alt={`Previous thumbnail ${idx + 1}`}
+                                                  className="w-12 h-12 object-cover rounded border flex-shrink-0"
+                                                  onError={(e) => {
+                                                    e.currentTarget.src = "/placeholder.svg?height=48&width=48"
+                                                  }}
+                                                />
+                                              ))
+                                            ) : (
+                                              <span className="text-gray-500 italic text-sm">No previous images</span>
+                                            )}
                                           </div>
-                                        </td>
-                                        <td className="border border-gray-200 px-4 py-3 bg-green-50">
-                                          <div className="space-y-1">
-                                            <div className="text-sm">
-                                              {Array.isArray(newValue) ? (
-                                                <div className="space-y-1">
-                                                  {newValue.length > 0 ? (
-                                                    newValue.map((item, i) => (
-                                                      <Badge key={i} variant="outline" className="text-xs mr-1 mb-1">
-                                                        {item}
-                                                      </Badge>
-                                                    ))
-                                                  ) : (
-                                                    <span className="text-gray-500 italic">No items</span>
-                                                  )}
-                                                </div>
-                                              ) : newValue === null ? (
-                                                <span className="text-gray-500 italic">Not available</span>
-                                              ) : (
-                                                <span>{String(newValue)}</span>
-                                              )}
-                                            </div>
-                                            <div className="text-xs text-green-600 flex items-center gap-1">
+                                          {product.changes?.details?.old_date && (
+                                            <div className="text-xs text-red-600 flex items-center gap-1">
                                               <Calendar className="h-3 w-3" />
-                                              {new Date(product.change_date).toLocaleString()}
-                                            </div>
-                                          </div>
-                                        </td>
-                                        <td className="border border-gray-200 px-4 py-3">
-                                          {hasChange ? (
-                                            <div className="flex items-center gap-1">
-                                              <TrendingUp className="h-3 w-3 text-blue-500" />
-                                              <span className="text-xs text-blue-600">Modified</span>
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-1">
-                                              <Plus className="h-3 w-3 text-green-500" />
-                                              <span className="text-xs text-green-600">Added</span>
+                                              {new Date(product.changes.details.old_date).toLocaleString()}
                                             </div>
                                           )}
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-
-                                {/* Thumbnail Images Row */}
-                                {product.details?.["Thumbnail Images"] && (
-                                  <tr className="hover:bg-gray-50">
-                                    <td className="border border-gray-200 px-4 py-3 font-medium">Thumbnail Images</td>
-                                    <td className="border border-gray-200 px-4 py-3 bg-red-50">
-                                      <div className="space-y-1">
-                                        <div className="flex gap-2 overflow-x-auto pb-2">
-                                          {product.changes?.details?.old?.["Thumbnail Images"] ? (
-                                            product.changes.details.old["Thumbnail Images"].map((img, i) => (
+                                        </div>
+                                      </td>
+                                      <td className="border border-gray-200 px-4 py-3 bg-green-50">
+                                        <div className="space-y-1">
+                                          <div className="flex gap-2 overflow-x-auto pb-2">
+                                            {product.details["Thumbnail Images"].map((img, i) => (
                                               <img
                                                 key={i}
                                                 src={img || "/placeholder.svg"}
-                                                alt={`Previous thumbnail ${i + 1}`}
+                                                alt={`Current thumbnail ${i + 1}`}
                                                 className="w-12 h-12 object-cover rounded border flex-shrink-0"
                                                 onError={(e) => {
                                                   e.currentTarget.src = "/placeholder.svg?height=48&width=48"
                                                 }}
                                               />
-                                            ))
-                                          ) : (
-                                            <span className="text-gray-500 italic text-sm">No previous images</span>
-                                          )}
-                                        </div>
-                                        {product.changes?.details?.old_date && (
-                                          <div className="text-xs text-red-600 flex items-center gap-1">
-                                            <Calendar className="h-3 w-3" />
-                                            {new Date(product.changes.details.old_date).toLocaleString()}
+                                            ))}
                                           </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="border border-gray-200 px-4 py-3 bg-green-50">
-                                      <div className="space-y-1">
-                                        <div className="flex gap-2 overflow-x-auto pb-2">
-                                          {product.details["Thumbnail Images"].map((img, i) => (
-                                            <img
-                                              key={i}
-                                              src={img || "/placeholder.svg"}
-                                              alt={`Current thumbnail ${i + 1}`}
-                                              className="w-12 h-12 object-cover rounded border flex-shrink-0"
-                                              onError={(e) => {
-                                                e.currentTarget.src = "/placeholder.svg?height=48&width=48"
-                                              }}
-                                            />
-                                          ))}
+                                          <div className="text-xs text-green-600 flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
+                                          </div>
                                         </div>
-                                        <div className="text-xs text-green-600 flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
-                                          {new Date(product.change_date).toLocaleString()}
+                                      </td>
+                                      <td className="border border-gray-200 px-4 py-3">
+                                        <div className="flex items-center gap-1">
+                                          <Eye className="h-3 w-3 text-blue-500" />
+                                          <span className="text-xs text-blue-600">
+                                            {product.changes?.details?.old?.["Thumbnail Images"] ? "Updated" : "Added"}
+                                          </span>
                                         </div>
-                                      </div>
-                                    </td>
-                                    <td className="border border-gray-200 px-4 py-3">
-                                      <div className="flex items-center gap-1">
-                                        <Eye className="h-3 w-3 text-blue-500" />
-                                        <span className="text-xs text-blue-600">
-                                          {product.changes?.details?.old?.["Thumbnail Images"] ? "Updated" : "Added"}
-                                        </span>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* Summary Section */}
-                          <div className="mt-4 pt-4 border-t bg-blue-50 rounded-lg p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Info className="h-4 w-4 text-blue-500" />
-                              <span className="text-sm font-medium text-blue-700">Change Summary</span>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <span className="font-medium text-gray-700">Product:</span>
-                                <div className="text-gray-600">{product.name}</div>
+
+                            <div className="mt-4 pt-4 border-t bg-blue-50 rounded-lg p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-blue-500" />
+                                <span className="text-sm font-medium text-blue-700">Change Summary</span>
                               </div>
-                              <div>
-                                <span className="font-medium text-gray-700">Last Updated:</span>
-                                <div className="text-gray-600">{new Date(product.change_date).toLocaleString()}</div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-700">Changes Detected:</span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {product.changes &&
-                                    Object.keys(product.changes).map((field) => (
-                                      <Badge key={field} variant="outline" className="text-xs">
-                                        {field.replace(/_/g, " ")}
-                                      </Badge>
-                                    ))}
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="font-medium text-gray-700">Product:</span>
+                                  <div className="text-gray-600">{product.name}</div>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-gray-700">Last Updated:</span>
+                                  <div className="text-gray-600">
+                                    {product.change_date ? new Date(product.change_date).toLocaleString() : "N/A"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-gray-700">Changes Detected:</span>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {product.changes &&
+                                      Object.keys(product.changes).map((field) => (
+                                        <Badge key={field} variant="outline" className="text-xs">
+                                          {field.replace(/_/g, " ")}
+                                        </Badge>
+                                      ))}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </TabsContent>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </TabsContent>
 
-            <TabsContent value="removed">
-              <ScrollArea className="h-[600px]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {comparisonData.removed.map((product, index) => renderDetailedProductCard(product, "removed"))}
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="removed">
+                <ScrollArea className="h-[600px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {comparisonData.removed.map((product, index) => renderDetailedProductCard(product, "removed"))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+            {renderPaginationControls()}
+          </>
         )}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">

@@ -29,22 +29,32 @@ type SavedDataItem = {
   data: ScrapedDataItem[]
 }
 
+// Default URLs to pre-populate
+const DEFAULT_SAVED_URLS = [
+  "https://www.nyjacket.com/",
+]
+
 interface ScrapingState {
   currentData: ScrapedDataItem[]
   history: HistoryItem[]
   savedData: SavedDataItem[]
+  savedUrls: string[]
   addScrapedData: (data: ScrapedDataItem[]) => void
   saveData: () => void
   removeFromHistory: (id: string) => void
   removeSavedData: (id: string) => void
+  addSavedUrl: (url: string) => void
+  removeSavedUrl: (url: string) => void
+  initializeDefaultUrls: () => void
 }
 
 export const useScrapingStore = create<ScrapingState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentData: [],
       history: [],
       savedData: [],
+      savedUrls: [],
 
       addScrapedData: (data: ScrapedDataItem[]) => {
         set((state) => {
@@ -89,9 +99,39 @@ export const useScrapingStore = create<ScrapingState>()(
           savedData: state.savedData.filter((item) => item.id !== id),
         }))
       },
+
+      addSavedUrl: (url: string) => {
+        set((state) => {
+          if (!state.savedUrls.includes(url)) {
+            return {
+              savedUrls: [...state.savedUrls, url],
+            }
+          }
+          return state
+        })
+      },
+
+      removeSavedUrl: (url: string) => {
+        set((state) => ({
+          savedUrls: state.savedUrls.filter((savedUrl) => savedUrl !== url),
+        }))
+      },
+
+      initializeDefaultUrls: () => {
+        const currentUrls = get().savedUrls
+        if (currentUrls.length === 0) {
+          set({ savedUrls: DEFAULT_SAVED_URLS })
+        }
+      },
     }),
     {
       name: "scraping-store",
+      // Use onRehydrateStorage to initialize default URLs after rehydration
+      onRehydrateStorage: () => (state) => {
+        if (state && state.savedUrls.length === 0) {
+          state.initializeDefaultUrls()
+        }
+      },
     },
   ),
 )

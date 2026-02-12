@@ -186,7 +186,7 @@ export function ProductComparisonSampleView() {
                         <Calendar className="h-3 w-3" />
                         <span>{new Date(product.change_date).toLocaleString()}</span>
                       </div>
-                      <a
+                      {/* <a
                         href={product.product_url}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -194,7 +194,7 @@ export function ProductComparisonSampleView() {
                       >
                         <ExternalLink className="h-3 w-3" />
                         View Product
-                      </a>
+                      </a> */}
                     </CardContent>
                   </Card>
                 ))}
@@ -336,9 +336,9 @@ export function ProductComparisonSampleView() {
                                 const hasChange =
                                   product.changes?.details &&
                                   product.changes.details.old &&
-                                  product.changes.details.old[key] !== undefined
+                                  (product.changes.details.old as Record<string, unknown>)[key] !== undefined
 
-                                const oldValue = hasChange ? product.changes.details.old[key] : "Not available"
+                                const oldValue = hasChange ? (product.changes.details.old as Record<string, unknown>)[key] : "Not available"
                                 const newValue = value
 
                                 return (

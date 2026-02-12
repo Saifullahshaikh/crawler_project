@@ -1,239 +1,220 @@
-// Django API endpoints
-const DJANGO_API_BASE = process.env.NEXT_PUBLIC_DJANGO_API_URL || "http://167.172.143.147:8000/api"
+"use client"
 
-export interface CrawlSessionData {
+const API_BASE_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || "http://localhost:8000/api"
+
+export interface User {
   id: string
+  username: string
+  email: string
+}
+
+export interface UserSession {
+  id: string
+  job_id: string
+  user_id: string
+  status: "pending" | "running" | "completed" | "failed"
+  progress: number
+  message?: string
+  error?: string
+  urls: string[]
+  started_at: string
+  updated_at: string
+  completed_at?: string
+}
+
+export interface CrawlSession {
+  id: string
+  job_id: string
+  user_id: string
   urls: string[]
   status: "pending" | "running" | "completed" | "failed"
-  started_at: string
-  completed_at?: string
+  progress: number
+  results?: any
   error?: string
-  progress?: number
-}
-
-export interface CategoryLinkData {
-  id: string
-  url: string
-  crawl_session_id: string
   created_at: string
+  updated_at: string
 }
 
-export interface ProductData {
-  id: string
-  name?: string
-  title: string
-  price: string
-  previous_price?: string
-  new_price?: string
-  rating?: string
-  customer_reviews?: string
-  product_url: string
-  image_url?: string
-  website_url: string
-  crawl_session_id: string
-  created_at: string
-  thumbnail_images?: string[]
-  size_options?: string[]
-  specifications?: string[]
-  price_range?: string[]
-  meta_data?: Record<string, any>
-}
+class DjangoApiService {
+  private async apiCall(endpoint: string, options: RequestInit = {}) {
+    const url = `${API_BASE_URL}${endpoint}`
 
-export class DjangoApiService {
-  private static async makeRequest(endpoint: string, options: RequestInit = {}) {
-    const url = `${DJANGO_API_BASE}${endpoint}`
-
-    const defaultHeaders = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
+    const defaultOptions: RequestInit = {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // Important for session cookies
+      ...options,
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    })
+    const response = await fetch(url, defaultOptions)
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || errorData.error || `HTTP ${response.status}`)
+      throw new Error(`API call failed: ${response.status} ${response.statusText}`)
     }
 
     return response.json()
   }
 
-  // Crawl Session Methods
-  static async createCrawlSession(urls: string[]): Promise<CrawlSessionData> {
-    return this.makeRequest("/crawl-sessions/", {
+  // Authentication
+  async login(username: string, password: string) {
+    return this.apiCall("/auth/login/", {
       method: "POST",
-      body: JSON.stringify({ urls }),
+      body: JSON.stringify({ username, password }),
     })
   }
 
-  static async updateCrawlSessionStatus(
-    id: string,
-    status: "pending" | "running" | "completed" | "failed",
-    error?: string,
-    progress?: number,
-  ): Promise<CrawlSessionData> {
-    return this.makeRequest(`/crawl-sessions/${id}/`, {
+
+  async logout() {
+      try {
+          // Clear session storage
+          sessionStorage.clear();
+
+          // Clear local storage
+          localStorage.clear();
+          // Retrieve CSRF token from cookies or meta tag
+          const getCookie = (name: string) => {
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) {
+                  const part = parts.pop();
+                  if (part !== undefined) {
+                      return part.split(';').shift();
+                  }
+              }
+              return null;
+          };
+          const csrfToken = getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content;
+
+          // Make API call to logout with CSRF token
+          const response = await this.apiCall("/auth/logout/", {
+              method: "POST",
+              credentials: "include", // Include cookies in the request
+              headers: {
+                  'X-CSRFToken': csrfToken || '', // Include CSRF token in headers
+                  'Content-Type': 'application/json'
+              }
+          });
+
+          // Clear session storage
+          sessionStorage.clear();
+
+          // Clear local storage
+          localStorage.clear();
+
+          // Clear all cookies
+          document.cookie.split(";").forEach(cookie => {
+              const name = cookie.split("=")[0].trim();
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+          });
+
+          // Redirect to login page
+          window.location.replace("/");
+
+          return response;
+      } catch (error) {
+          console.error("Logout failed:", error);
+          // Optionally notify user of failure
+          throw error;
+      }
+  }
+
+  async getProfile() {
+    return this.apiCall("/auth/profile/")
+  }
+
+  async getSessionStatus() {
+    return this.apiCall("/auth/session-status/", {
+      method: "GET",
+      credentials: "include",
+    });
+  }
+
+  async healthCheck() {
+    return this.apiCall("/health/")
+  }
+
+  // User Sessions
+  async getUserSessions(userId: string): Promise<{ active_session: UserSession | null; all_sessions: UserSession[] }> {
+    return this.apiCall(`/user-sessions/?user_id=${userId}`)
+  }
+
+  async createUserSession(data: {
+    job_id: string
+    user_id: string
+    urls: string[]
+    status?: string
+  }): Promise<UserSession> {
+    return this.apiCall("/user-sessions/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+
+  async updateUserSession(jobId: string, updates: any): Promise<UserSession> {
+    console.log("Updating user session:", jobId, "with updates:", updates);
+
+    return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "PATCH",
-      body: JSON.stringify({ status, error, progress }),
-    })
-  }
-
-  static async getCrawlSession(id: string): Promise<CrawlSessionData> {
-    return this.makeRequest(`/crawl-sessions/${id}/`)
-  }
-
-  static async getLatestCrawlSessions(limit = 10): Promise<CrawlSessionData[]> {
-    const response = await this.makeRequest(`/crawl-sessions/?limit=${limit}&ordering=-started_at`)
-    return response.results || response
-  }
-
-  // Category Links Methods
-  static async saveCategoryLinks(crawlSessionId: string, urls: string[]): Promise<void> {
-    await this.makeRequest("/category-links/bulk/", {
-      method: "POST",
-      body: JSON.stringify({
-        crawl_session_id: crawlSessionId,
-        urls: urls,
-      }),
-    })
-  }
-
-  static async getCategoryLinks(crawlSessionId?: string): Promise<CategoryLinkData[]> {
-    const endpoint = crawlSessionId
-      ? `/category-links/?crawl_session_id=${crawlSessionId}`
-      : "/category-links/?limit=100&ordering=-created_at"
-
-    const response = await this.makeRequest(endpoint)
-    return response.results || response
-  }
-
-  static async getLatestCategoryLinks(): Promise<CategoryLinkData[]> {
-    const response = await this.makeRequest("/category-links/latest/")
-    return response.results || response
-  }
-
-  // Product Methods
-  static async saveProducts(crawlSessionId: string, products: any[]): Promise<void> {
-    const productData = products.map((product) => ({
-      name: product.name,
-      title: product.product_details?.Title || product.name || "Unknown Product",
-      price: product.price,
-      previous_price: product.product_details?.["Previous Price"],
-      new_price: product.product_details?.["New Price"],
-      rating: product.product_details?.Rating,
-      customer_reviews: product.product_details?.["Customer Reviews"],
-      product_url: product.product_url,
-      image_url: product.image_url,
-      website_url: product.website_url || "",
-      crawl_session_id: crawlSessionId,
-      thumbnail_images: product.product_details?.["Thumbnail Images"] || [],
-      size_options: product.product_details?.["Size Options"] || [],
-      specifications: product.product_details?.["Product Specification"] || [],
-      price_range: product.product_details?.["Price Range"] || [],
-      meta_data: product.product_details || {},
-    }))
-
-    await this.makeRequest("/products/bulk/", {
-      method: "POST",
-      body: JSON.stringify({
-        crawl_session_id: crawlSessionId,
-        products: productData,
-      }),
-    })
-  }
-
-  static async getProducts(crawlSessionId?: string): Promise<ProductData[]> {
-    const endpoint = crawlSessionId
-      ? `/products/?crawl_session_id=${crawlSessionId}`
-      : "/products/?limit=100&ordering=-created_at"
-
-    const response = await this.makeRequest(endpoint)
-    return response.results || response
-  }
-
-  static async getLatestProducts(): Promise<ProductData[]> {
-    const response = await this.makeRequest("/products/latest/")
-    return response.results || response
-  }
-
-  // Comparison Methods
-  static async getProductChangesByJobId(jobId: string) {
-    return this.makeRequest(`/product-changes?jobId=${jobId}`)
-  }
-
-  // Update the existing comparison method to use job ID if provided
-  static async getProductComparison(jobId?: string) {
-    if (jobId) {
-      return this.getProductChangesByJobId(jobId)
-    }
-    return this.makeRequest("/products/comparison/")
-  }
-
-  // Search and Filter Methods
-  static async searchProducts(query: string, filters?: Record<string, any>): Promise<ProductData[]> {
-    const params = new URLSearchParams({ search: query })
-
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value))
-        }
-      })
-    }
-
-    const response = await this.makeRequest(`/products/search/?${params}`)
-    return response.results || response
-  }
-
-  // Analytics Methods
-  static async getAnalytics(crawlSessionId?: string) {
-    const endpoint = crawlSessionId ? `/analytics/?crawl_session_id=${crawlSessionId}` : "/analytics/"
-
-    return this.makeRequest(endpoint)
-  }
-
-  // Export Methods
-  static async exportData(format: "json" | "csv" | "excel", crawlSessionId?: string): Promise<Blob> {
-    const params = new URLSearchParams({ format })
-    if (crawlSessionId) {
-      params.append("crawl_session_id", crawlSessionId)
-    }
-
-    const response = await fetch(`${DJANGO_API_BASE}/export/?${params}`, {
       headers: {
-        Accept:
-          format === "json"
-            ? "application/json"
-            : format === "csv"
-              ? "text/csv"
-              : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/json",
       },
-    })
-
-    if (!response.ok) {
-      throw new Error(`Export failed: ${response.statusText}`)
-    }
-
-    return response.blob()
+      credentials: "include", // still required if you're using session-based auth
+      body: JSON.stringify(updates),
+    });
   }
-
-  // Cleanup Methods
-  static async deleteOldCrawlSessions(daysOld = 30): Promise<{ deleted_count: number }> {
-    return this.makeRequest("/crawl-sessions/cleanup/", {
-      method: "POST",
-      body: JSON.stringify({ days_old: daysOld }),
-    })
-  }
-
-  static async deleteCrawlSession(id: string): Promise<void> {
-    await this.makeRequest(`/crawl-sessions/${id}/`, {
+  async deleteUserSession(jobId: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/user-sessions/${jobId}/`, {
       method: "DELETE",
     })
   }
+
+  // Crawl Sessions
+  async getLatestCrawlSessions(userId: string, limit = 10): Promise<CrawlSession[]> {
+    const response = await this.apiCall(`/crawl-sessions/?user_id=${userId}&limit=${limit}`)
+    return response.results
+  }
+
+  async createCrawlSession(urls: string[], userId: string): Promise<CrawlSession> {
+    const jobId = `crawl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    return this.apiCall("/crawl-sessions/", {
+      method: "POST",
+      body: JSON.stringify({
+        job_id: jobId,
+        user_id: userId,
+        urls,
+        status: "pending",
+      }),
+    })
+  }
+
+  async updateCrawlSessionStatus(sessionId: string, status: string, error?: string): Promise<CrawlSession> {
+    return this.apiCall(`/crawl-sessions/${sessionId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, error }),
+    })
+  }
+
+  async deleteCrawlSession(sessionId: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/crawl-sessions/${sessionId}/`, {
+      method: "DELETE",
+    })
+  }
+}
+
+export const djangoApiService = new DjangoApiService()
+export { DjangoApiService }
+export default djangoApiService
+
+
+
+function getCookie(name: string): string | null {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop()!.split(";").shift()!;
+  }
+  return null;
 }

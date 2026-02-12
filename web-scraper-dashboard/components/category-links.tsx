@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2, ExternalLink, RefreshCw, Download } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { serverConfig } from "@/lib/config"
 
 export function CategoryLinks() {
   const [categoryLinks, setCategoryLinks] = useState<string[]>([])
@@ -16,7 +17,7 @@ export function CategoryLinks() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://167.172.143.147:8000/api/categories/")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL}/categories/`)
       const data = await response.json()
 
       if (!response.ok) {
